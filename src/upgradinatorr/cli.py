@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, TypedDict, cast
 
 import rich_click as click
 from rich.console import Console
@@ -27,7 +27,14 @@ click.rich_click.SHOW_ARGUMENTS = True
 click.rich_click.GROUP_ARGUMENTS_OPTIONS = True
 click.rich_click.STYLE_ERRORS_SUGGESTION = "magenta italic"
 
-APP_COLORS = {
+
+class AppColor(TypedDict):
+    hex: str
+    decimal: int
+    thumbnail: str
+
+
+APP_COLORS: dict[str, AppColor] = {
     "radarr": {
         "hex": "FFC230",
         "decimal": 16761392,
@@ -322,7 +329,7 @@ def main(
                 continue
 
             try:
-                app_config = ApplicationConfig(**config_dict[app_config_key])
+                app_config = ApplicationConfig(**cast(dict[str, Any], config_dict[app_config_key]))
                 await process_application(app_lower, app_config, notifications)
             except Exception as e:
                 console.print(f"[red]Error processing {app}: {e}[/red]")
