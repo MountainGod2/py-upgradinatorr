@@ -93,4 +93,4 @@ class MediaFilter:
             "lidarr": "artistName",
             "readarr": "authorName",
         }
-        return item.get(title_fields.get(app_name, "title"), "Unknown")
+        return str(item.get(title_fields.get(app_name, "title"), "Unknown"))
