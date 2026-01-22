@@ -1,7 +1,7 @@
 """Starr application API client."""
 
 import asyncio
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import aiohttp
 from rich.console import Console
@@ -107,7 +107,7 @@ class StarrClient:
                 )
                 raise StarrAPIError(response.status, message, self.app_name)
 
-            return await response.json()
+            return cast(dict[str, Any] | list[dict[str, Any]], await response.json())
 
     async def _get_api_version(self) -> str:
         """Get current API version from application."""
@@ -123,7 +123,7 @@ class StarrClient:
                     self.app_name,
                 )
             data = await response.json()
-            return data["current"]
+            return cast(str, data["current"])
 
     async def get_all_media(self) -> list[dict[str, Any]]:
         """Get all media items from the application."""
@@ -195,7 +195,7 @@ class StarrClient:
 
         # Build the appropriate body based on app type
         if self.app_name == "radarr":
-            body = {"name": command, "movieIds": [media_id]}
+            body: dict[str, Any] = {"name": command, "movieIds": [media_id]}
         else:
             # Sonarr, Lidarr, Readarr use singular ID
             id_field = self.app_name.rstrip("r") + "Id"
