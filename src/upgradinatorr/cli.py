@@ -7,8 +7,6 @@ from typing import Any, Optional, TypedDict, cast
 import rich_click as click
 from rich import box
 from rich.console import Console
-from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 from upgradinatorr.config import (
@@ -21,13 +19,14 @@ from upgradinatorr.notifications.notifiarr import send_notifiarr_notification
 from upgradinatorr.starr.client import StarrClient, StarrAPIError
 from upgradinatorr.starr.media import MediaFilter
 
-console = Console()
+console = Console(width=100)
 
 # Configure rich-click
 click.rich_click.USE_RICH_MARKUP = True
 click.rich_click.SHOW_ARGUMENTS = True
 click.rich_click.GROUP_ARGUMENTS_OPTIONS = True
 click.rich_click.STYLE_ERRORS_SUGGESTION = "magenta italic"
+click.rich_click.STYLE_OPTIONS_TABLE_BOX = "SIMPLE"
 
 
 class AppColor(TypedDict):
@@ -60,6 +59,74 @@ APP_COLORS: dict[str, AppColor] = {
 }
 
 
+def get_app_style(app_name: str) -> str:
+    """Get the color style for an application."""
+    color = APP_COLORS.get(app_name.lower(), {}).get("hex", "white")
+    return f"#{color}"
+
+
+def create_media_table(media_items: list[dict[str, Any]], app_name: str, title: str) -> Table:
+    """Create a formatted table for media items."""
+    app_style = get_app_style(app_name)
+    table = Table(title=title, box=box.SIMPLE, border_style=app_style)
+
+    # Determine columns based on app type
+    if app_name == "radarr":
+        table.add_column("Title", style="white")
+        table.add_column("Year", style="cyan", justify="right")
+        table.add_column("Status", style="magenta")
+        table.add_column("Monitored", justify="center")
+    elif app_name == "sonarr":
+        table.add_column("Title", style="white")
+        table.add_column("Year", style="cyan", justify="right")
+        table.add_column("Status", style="magenta")
+        table.add_column("Monitored", justify="center")
+        table.add_column("Seasons", justify="right", style="green")
+    elif app_name == "lidarr":
+        table.add_column("Artist", style="white")
+        table.add_column("Status", style="magenta")
+        table.add_column("Monitored", justify="center")
+    elif app_name == "readarr":
+        table.add_column("Author", style="white")
+        table.add_column("Status", style="magenta")
+        table.add_column("Monitored", justify="center")
+
+    for item in media_items:
+        monitored = "✓" if item.get("monitored") else "✗"
+        status = str(item.get("status", "unknown")).title()
+
+        # Color code common statuses
+        if status.lower() in ["continuing", "released", "announced"]:
+            status = f"[green]{status}[/green]"
+        elif status.lower() in ["ended", "missing"]:
+            status = f"[red]{status}[/red]"
+
+        if app_name == "radarr":
+            table.add_row(
+                item.get("title", "Unknown"),
+                str(item.get("year", "")),
+                status,
+                monitored,
+            )
+        elif app_name == "sonarr":
+            seasons = str(
+                item.get("seasonCount", item.get("statistics", {}).get("seasonCount", "?"))
+            )
+            table.add_row(
+                item.get("title", "Unknown"),
+                str(item.get("year", "")),
+                status,
+                monitored,
+                seasons,
+            )
+        elif app_name == "lidarr":
+            table.add_row(item.get("artistName", "Unknown"), status, monitored)
+        elif app_name == "readarr":
+            table.add_row(item.get("authorName", "Unknown"), status, monitored)
+
+    return table
+
+
 async def process_application(
     app_name: str,
     config: ApplicationConfig,
@@ -75,78 +142,68 @@ async def process_application(
         dry_run: If True, run in dry-run mode
     """
     app_name = app_name.lower()
-    title = f"Processing {app_name.title()}"
+    app_style = get_app_style(app_name)
+
+    # Header
+    console.print()
+    console.rule(f"[{app_style}]{app_name.title()}[/{app_style}]")
     if dry_run:
-        title += " (Dry Run)"
-    
-    console.print(Panel(f"[bold cyan]{title}[/bold cyan]", border_style="cyan"))
+        console.print("[yellow]DRY RUN MODE[/yellow]", justify="center")
 
     # Display configuration summary
-    table = Table(title="Configuration", box=box.SIMPLE)
-    table.add_column("Setting", style="cyan")
-    table.add_column("Value", style="green")
-    
-    table.add_row("URL", config.url)
-    table.add_row("Count", str(config.count))
-    table.add_row("Tag Name", config.tag_name)
-    if config.ignore_tag:
-        table.add_row("Ignore Tag", config.ignore_tag)
-    table.add_row("Monitored", str(config.monitored))
-    
-    status = getattr(config, f"{app_name.rstrip('r')}_status", None)
-    if not status and app_name == "radarr": # Special case for movie_status as it is on 'movie' but radarr ends in rr
-         status = config.movie_status
-    elif not status and app_name == "sonarr":
-         status = config.series_status
+    summary_parts = [
+        f"URL: [dim]{config.url}[/dim]",
+        f"Count: [dim]{config.count}[/dim]",
+        f"Tag: [dim]{config.tag_name}[/dim]",
+    ]
 
-    if status:
-         table.add_row("Status Filter", status)
-         
-    if config.quality_profile_name:
-        table.add_row("Quality Profile", config.quality_profile_name)
-    
-    console.print(table)
-    console.print() # spacing
+    if config.ignore_tag:
+        summary_parts.append(f"Ignore: [dim]{config.ignore_tag}[/dim]")
+
+    console.print(" | ".join(summary_parts))
+    console.print()
 
     try:
         async with StarrClient(app_name, config.url, config.api_key) as client:
             # Get or create tags
-            if dry_run:
-                tag = await client.get_tag(config.tag_name)
-                if tag:
-                    tag_id = int(tag["id"])
-                else:
-                    console.print(f"[yellow]Would create tag '{config.tag_name}'[/yellow]")
-                    tag_id = -1
-            else:
-                tag_id = await client.get_or_create_tag(config.tag_name)
-
-            ignore_tag_id = None
-            if config.ignore_tag:
+            with console.status(f"[{app_style}]Checking tags...", spinner="dots"):
                 if dry_run:
-                    tag = await client.get_tag(config.ignore_tag)
+                    tag = await client.get_tag(config.tag_name)
                     if tag:
-                        ignore_tag_id = int(tag["id"])
+                        tag_id = int(tag["id"])
                     else:
-                        console.print(
-                            f"[yellow]Would create ignore tag '{config.ignore_tag}'[/yellow]"
-                        )
-                        ignore_tag_id = -2
+                        console.print(f"[yellow]- Would create tag '{config.tag_name}'[/yellow]")
+                        tag_id = -1
                 else:
-                    ignore_tag_id = await client.get_or_create_tag(config.ignore_tag)
+                    tag_id = await client.get_or_create_tag(config.tag_name)
 
-                if tag_id == ignore_tag_id:
-                    raise ValueError(
-                        f"Tag '{config.tag_name}' and ignore tag '{config.ignore_tag}' "
-                        "cannot be the same"
-                    )
+                ignore_tag_id = None
+                if config.ignore_tag:
+                    if dry_run:
+                        tag = await client.get_tag(config.ignore_tag)
+                        if tag:
+                            ignore_tag_id = int(tag["id"])
+                        else:
+                            console.print(
+                                f"[yellow]- Would create ignore tag '{config.ignore_tag}'[/yellow]"
+                            )
+                            ignore_tag_id = -2
+                    else:
+                        ignore_tag_id = await client.get_or_create_tag(config.ignore_tag)
+
+                    if tag_id == ignore_tag_id:
+                        raise ValueError(
+                            f"Tag '{config.tag_name}' and ignore tag '{config.ignore_tag}' "
+                            "cannot be the same"
+                        )
 
             # Get quality profile ID if specified
             quality_profile_id = None
             if config.quality_profile_name:
-                quality_profile_id = await client.get_quality_profile_id(
-                    config.quality_profile_name
-                )
+                with console.status(f"[{app_style}]Checking quality profile...", spinner="dots"):
+                    quality_profile_id = await client.get_quality_profile_id(
+                        config.quality_profile_name
+                    )
 
             # Determine status based on app type
             status = None
@@ -160,144 +217,118 @@ async def process_application(
                 status = config.author_status
 
             # Get all media with spinner
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=console,
-            ) as progress:
-                task = progress.add_task(f"Retrieving media from {app_name.title()}...", total=None)
+            with console.status(
+                f"[{app_style}]Retrieving media from {app_name.title()}...", spinner="bouncingBall"
+            ) as status_spinner:
                 all_media = await client.get_all_media()
-                progress.update(task, completed=True)
-            
-            console.print(f"[dim]Retrieved {len(all_media)} items total[/dim]")
+                status_spinner.update(f"Filtering {len(all_media)} items...")
 
-            # Filter media
-            media_filter = MediaFilter(
-                monitored=config.monitored,
-                tag_id=tag_id,
-                status=status,
-                quality_profile_id=quality_profile_id,
-                ignore_tag_id=ignore_tag_id,
-            )
+                # Filter media
+                media_filter = MediaFilter(
+                    monitored=config.monitored,
+                    tag_id=tag_id,
+                    status=status,
+                    quality_profile_id=quality_profile_id,
+                    ignore_tag_id=ignore_tag_id,
+                )
 
-            if config.unattended:
-                filtered = media_filter.filter_unattended(all_media)
-            else:
-                filtered = media_filter.filter_attended(all_media)
-
-            # Handle empty results
-            if not filtered:
                 if config.unattended:
-                    # Remove tag from all tagged items and re-filter
-                    console.print(
-                        "[yellow]No media left to process. Removing tags and re-filtering...[/yellow]"
-                    )
-                    tagged_media = media_filter.filter_unattended(all_media)
-                    if tagged_media:
-                        media_ids = [item["id"] for item in tagged_media]
-                        if dry_run:
-                            console.print(
-                                f"[yellow]Would remove tag from {len(media_ids)} items[/yellow]"
-                            )
-                            # Simulate tag removal for re-filtering
-                            for item in all_media:
-                                if (
-                                    item.get("id") in media_ids
-                                    and "tags" in item
-                                    and tag_id in item["tags"]
-                                ):
-                                    item["tags"].remove(tag_id)
-                        else:
-                            await client.remove_tags_from_media(media_ids, tag_id)
-                            all_media = await client.get_all_media()
-                        filtered = media_filter.filter_attended(all_media)
-
-                    if not filtered:
-                        console.print("[yellow]No media to process after tag removal[/yellow]")
-                        return
+                    filtered = media_filter.filter_unattended(all_media)
                 else:
-                    console.print("[yellow]No media found matching criteria[/yellow]")
-                    if notifications:
-                        await send_completion_notification(
-                            app_name, [], notifications, "No media left to search"
-                        )
-                    return
+                    filtered = media_filter.filter_attended(all_media)
 
-            console.print(f"[green]Found {len(filtered)} media items matching criteria[/green]")
+                # Handle empty results
+                if not filtered:
+                    if config.unattended:
+                        # Remove tag from all tagged items and re-filter
+                        console.print(
+                            "[yellow]No media left to process. Removing tags and re-filtering...[/yellow]"
+                        )
+                        tagged_media = media_filter.filter_unattended(all_media)
+                        if tagged_media:
+                            media_ids = [item["id"] for item in tagged_media]
+                            if dry_run:
+                                console.print(
+                                    f"[yellow]- Would remove tag from {len(media_ids)} items[/yellow]"
+                                )
+                                # Simulate tag removal for re-filtering
+                                for item in all_media:
+                                    if (
+                                        item.get("id") in media_ids
+                                        and "tags" in item
+                                        and tag_id in item["tags"]
+                                    ):
+                                        item["tags"].remove(tag_id)
+                            else:
+                                await client.remove_tags_from_media(media_ids, tag_id)
+                                all_media = await client.get_all_media()
+                            filtered = media_filter.filter_attended(all_media)
+
+                        if not filtered:
+                            console.print("[yellow]No media to process after tag removal[/yellow]")
+                            return
+                    else:
+                        console.print(
+                            f"[yellow]No {app_name} media found matching criteria[/yellow]"
+                        )
+                        if notifications:
+                            await send_completion_notification(
+                                app_name, [], notifications, "No media left to search"
+                            )
+                        return
+
+            console.print(
+                f"[{app_style}]Found {len(filtered)} candidates matching criteria[/{app_style}]"
+            )
 
             # Select random media based on count
             selected = MediaFilter.select_random(filtered, config.count)
-            
+
             # Display selected items
-            table = Table(title=f"Selected Items ({len(selected)})", box=box.SIMPLE)
-            
-            # Determine columns based on first item
             if selected:
-                first_item = selected[0]
-                if "title" in first_item:
-                    table.add_column("Title", style="cyan")
-                    if "year" in first_item:
-                         table.add_column("Year", style="magenta")
-                elif "artistName" in first_item:
-                    table.add_column("Artist", style="cyan")
-                elif "authorName" in first_item:
-                    table.add_column("Author", style="cyan")
-                
-                # Add rows
-                for item in selected:
-                    if "title" in item:
-                        year = str(item.get("year", ""))
-                        table.add_row(item["title"], year)
-                    elif "artistName" in item:
-                        table.add_row(item["artistName"])
-                    elif "authorName" in item:
-                        table.add_row(item["authorName"])
-            
-            console.print(table)
+                table = create_media_table(selected, app_name, f"Selected Items ({len(selected)})")
+                console.print(table)
+            else:
+                console.print("[yellow]No items selected[/yellow]")
 
             # Start searches
             if dry_run:
                 console.print(
-                    f"[yellow]Would search {len(selected)} items in {app_name.title()}[/yellow]"
+                    f"[yellow]- Would search {len(selected)} items in {app_name.title()}[/yellow]"
                 )
             else:
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    console=console,
-                ) as progress:
-                    task = progress.add_task(
-                        f"Searching {len(selected)} items in {app_name.title()}...",
-                        total=None,
-                    )
+                with console.status(f"[{app_style}]Triggering searches...", spinner="dots"):
                     await client.search_media_batch(selected)
-                    progress.update(task, completed=True)
-                console.print(f"[cyan]Search triggered for {len(selected)} items[/cyan]")
+                console.print(
+                    f"[{app_style}]✓ Search triggered for {len(selected)} items[/{app_style}]"
+                )
 
             # Add tags
             media_ids = [item["id"] for item in selected]
             if dry_run:
                 console.print(
-                    f"[yellow]Would add tag to {len(media_ids)} items in {app_name.title()}[/yellow]"
+                    f"[yellow]- Would add tag to {len(media_ids)} items in {app_name.title()}[/yellow]"
                 )
             else:
-                await client.add_tags_to_media(media_ids, tag_id)
-                console.print(f"[green]Added tag '{config.tag_name}' to {len(media_ids)} items[/green]")
+                with console.status(f"[{app_style}]Updating tags...", spinner="dots"):
+                    await client.add_tags_to_media(media_ids, tag_id)
+                console.print(
+                    f"[green]✓ Added tag '{config.tag_name}' to {len(media_ids)} items[/green]"
+                )
 
             # Send notifications
             if notifications:
                 if dry_run:
-                    console.print("[yellow]Would send completion notification[/yellow]")
+                    console.print("[yellow]- Would send completion notification[/yellow]")
                 else:
-                    await send_completion_notification(app_name, selected, notifications)
+                    with console.status("Sending notifications...", spinner="dots"):
+                        await send_completion_notification(app_name, selected, notifications)
+                    console.print("[green]✓ Notifications sent[/green]")
 
-            console.print(
-                Panel(
-                    f"[bold green]✓ Successfully processed {len(selected)} items "
-                    f"in {app_name.title()}[/bold green]",
-                    border_style="green",
+            if not dry_run:
+                console.print(
+                    f"[bold green]✓ Successfully processed {len(selected)} items in {app_name.title()}[/bold green]"
                 )
-            )
 
     except StarrAPIError as e:
         console.print(f"[red]API Error: {e}[/red]")
@@ -407,18 +438,13 @@ def main(
 
         upgradinatorr -a radarr --dry-run
     """
-    console.print(
-        Panel.fit(
-            renderable="[bold cyan]Upgradinatorr[/bold cyan]",
-            title_align="center",
-            border_style="cyan",
-        )
-    )
+    # Header
+    console.rule("[bold cyan]Upgradinatorr[/bold cyan]")
 
     if verbose:
-        console.print("[dim]Verbose mode enabled[/dim]")
+        console.print("[dim]Verbose mode enabled[/dim]", justify="center")
     if dry_run:
-        console.print("[yellow]Running in dry-run mode[/yellow]")
+        console.print("[yellow]Running in DRY-RUN mode[/yellow]", justify="center")
 
     # Parse configuration
     try:
@@ -440,6 +466,10 @@ def main(
 
     # Process each application
     async def run_all() -> None:
+        console.print(
+            f"\n[bold]Processing {len(applications)} application(s):[/bold] {', '.join(applications)}"
+        )
+
         for app in applications:
             app_lower = app.lower()
 
@@ -451,17 +481,20 @@ def main(
                     break
 
             if not app_config_key:
-                console.print(f"[red]No configuration found for {app}[/red]")
+                console.print(f"[red]✗ No configuration found for {app}[/red]")
                 continue
 
             try:
                 app_config = ApplicationConfig(**cast(dict[str, Any], config_dict[app_config_key]))
                 await process_application(app_lower, app_config, notifications, dry_run)
             except Exception as e:
-                console.print(f"[red]Error processing {app}: {e}[/red]")
+                console.print(f"[red]✗ Error processing {app}: {e}[/red]")
                 if verbose:
                     console.print_exception()
                 continue
+
+        console.print()
+        console.print("[bold green]All tasks completed![/bold green]")
 
     try:
         asyncio.run(run_all())
