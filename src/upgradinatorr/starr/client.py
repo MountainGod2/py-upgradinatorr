@@ -6,7 +6,7 @@ from typing import Any, Optional, cast
 import aiohttp
 from rich.console import Console
 
-console = Console()
+console = Console(width=100)
 
 
 class StarrAPIError(Exception):
