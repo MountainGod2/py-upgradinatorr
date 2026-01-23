@@ -54,7 +54,7 @@ class ApplicationConfig(BaseModel):
 
     api_key: str = Field(..., alias="ApiKey", min_length=32, max_length=32)
     url: str = Field(..., alias="Url")
-    count: str | int = Field(default="max", alias="Count")
+    count: str | int = Field(..., alias="Count")
     monitored: bool = Field(default=True, alias="Monitored")
     unattended: bool = Field(default=False, alias="Unattended")
     tag_name: str = Field(..., alias="TagName", min_length=1)
@@ -78,9 +78,13 @@ class ApplicationConfig(BaseModel):
     @classmethod
     def validate_count(cls, v: str | int) -> str | int:
         if isinstance(v, str):
-            if v.lower() != "max":
+            if v.lower() == "max":
+                return "max"
+            try:
+                v = int(v)
+            except ValueError:
                 raise ValueError("Count must be 'max' or a positive integer")
-            return "max"
+
         if v < 1:
             raise ValueError("Count must be greater than 0")
         return v
@@ -88,6 +92,8 @@ class ApplicationConfig(BaseModel):
     @field_validator("movie_status")
     @classmethod
     def validate_movie_status(cls, v: Optional[str]) -> Optional[str]:
+        if v == "in cinemas":
+            v = "inCinemas"
         if v and v not in ["tba", "announced", "inCinemas", "released", "deleted"]:
             raise ValueError(
                 "MovieStatus must be one of: tba, announced, inCinemas, released, deleted"
