@@ -2,15 +2,6 @@
 
 Automated media upgrade search for Starr applications (Radarr, Sonarr, Lidarr, Readarr).
 
-## Features
-
-- Automated upgrade searches across multiple Starr applications
-- Flexible filtering by quality profiles, tags, and status
-- Discord and Notifiarr webhook notifications
-- Async operations for fast performance
-- Beautiful CLI with Rich formatting
-- Type-safe configuration with Pydantic
-
 ## Installation
 
 ```bash
@@ -85,4 +76,3 @@ MIT
 ## Credits
 
 Original PowerShell version by angrycuban13
-Python port maintains the same functionality with async improvements
