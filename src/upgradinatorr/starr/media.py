@@ -52,17 +52,14 @@ class MediaFilter:
 
         # Apply optional filters
         if self.status:
-            console.log(f"[dim]Filtering by status: {self.status}[/dim]")
             filtered = [item for item in filtered if item.get("status") == self.status]
 
         if self.quality_profile_id:
-            console.log(f"[dim]Filtering by quality profile ID: {self.quality_profile_id}[/dim]")
             filtered = [
                 item for item in filtered if item.get("qualityProfileId") == self.quality_profile_id
             ]
 
         if self.ignore_tag_id:
-            console.log(f"[dim]Excluding items with ignore tag ID: {self.ignore_tag_id}[/dim]")
             filtered = [item for item in filtered if self.ignore_tag_id not in item.get("tags", [])]
 
         return filtered
