@@ -129,7 +129,6 @@ class StarrClient:
         """Get all media items from the application."""
         endpoint = self.ENDPOINTS[self.app_name]
         media = await self._request("GET", endpoint)
-        console.log(f"[cyan]Retrieved {len(media)} media items from {self.app_name.title()}[/cyan]")
         return media if isinstance(media, list) else []
 
     async def get_tag(self, tag_name: str) -> Optional[dict[str, Any]]:
@@ -143,7 +142,6 @@ class StarrClient:
 
     async def create_tag(self, tag_name: str) -> dict[str, Any]:
         """Create a new tag."""
-        console.log(f"[yellow]Creating tag '{tag_name}' in {self.app_name.title()}[/yellow]")
         result = await self._request("POST", "tag", json={"label": tag_name})
         return result if isinstance(result, dict) else {}
 
@@ -173,9 +171,6 @@ class StarrClient:
         body = {id_key: media_ids, "tags": [tag_id], "applyTags": "add"}
 
         await self._request("PUT", endpoint, json=body)
-        console.log(
-            f"[green]Added tag to {len(media_ids)} media items in {self.app_name.title()}[/green]"
-        )
 
     async def remove_tags_from_media(self, media_ids: list[int], tag_id: int) -> None:
         """Remove tag from multiple media items."""
@@ -184,10 +179,6 @@ class StarrClient:
         body = {id_key: media_ids, "tags": [tag_id], "applyTags": "remove"}
 
         await self._request("PUT", endpoint, json=body)
-        console.log(
-            f"[magenta]Removed tag from {len(media_ids)} media items in "
-            f"{self.app_name.title()}[/magenta]"
-        )
 
     async def search_media(self, media_id: int) -> None:
         """Trigger search for a single media item."""
@@ -198,7 +189,8 @@ class StarrClient:
             body: dict[str, Any] = {"name": command, "movieIds": [media_id]}
         else:
             # Sonarr, Lidarr, Readarr use singular ID
-            id_field = self.app_name.rstrip("r") + "Id"
+            object_name = self.ENDPOINTS[self.app_name]
+            id_field = f"{object_name}Id"
             body = {"name": command, id_field: media_id}
 
         await self._request("POST", "command", json=body)
@@ -212,7 +204,14 @@ class StarrClient:
             await self._request("POST", "command", json=body)
         else:
             # Search one at a time for Sonarr/Lidarr/Readarr
-            tasks = [self.search_media(item["id"]) for item in media_items]
+            # Use a semaphore to limit concurrent requests
+            semaphore = asyncio.Semaphore(10)
+
+            async def logged_search(media_id: int) -> None:
+                async with semaphore:
+                    await self.search_media(media_id)
+
+            tasks = [logged_search(item["id"]) for item in media_items]
             await asyncio.gather(*tasks)
 
         console.log(
