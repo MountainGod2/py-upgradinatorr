@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import Any, Optional, TypedDict, cast
 
 import rich_click as click
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
 
 from upgradinatorr.config import (
     ApplicationConfig,
@@ -62,6 +64,7 @@ async def process_application(
     app_name: str,
     config: ApplicationConfig,
     notifications: Optional[NotificationConfig] = None,
+    dry_run: bool = False,
 ) -> None:
     """Process a single Starr application.
 
@@ -69,20 +72,69 @@ async def process_application(
         app_name: Name of the application (radarr, sonarr, etc.)
         config: Application configuration
         notifications: Optional notification configuration
+        dry_run: If True, run in dry-run mode
     """
     app_name = app_name.lower()
+    title = f"Processing {app_name.title()}"
+    if dry_run:
+        title += " (Dry Run)"
+    
+    console.print(Panel(f"[bold cyan]{title}[/bold cyan]", border_style="cyan"))
 
-    console.print(
-        Panel(f"[bold cyan]Processing {app_name.title()}[/bold cyan]", border_style="cyan")
-    )
+    # Display configuration summary
+    table = Table(title="Configuration", box=box.SIMPLE)
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
+    
+    table.add_row("URL", config.url)
+    table.add_row("Count", str(config.count))
+    table.add_row("Tag Name", config.tag_name)
+    if config.ignore_tag:
+        table.add_row("Ignore Tag", config.ignore_tag)
+    table.add_row("Monitored", str(config.monitored))
+    
+    status = getattr(config, f"{app_name.rstrip('r')}_status", None)
+    if not status and app_name == "radarr": # Special case for movie_status as it is on 'movie' but radarr ends in rr
+         status = config.movie_status
+    elif not status and app_name == "sonarr":
+         status = config.series_status
+
+    if status:
+         table.add_row("Status Filter", status)
+         
+    if config.quality_profile_name:
+        table.add_row("Quality Profile", config.quality_profile_name)
+    
+    console.print(table)
+    console.print() # spacing
 
     try:
         async with StarrClient(app_name, config.url, config.api_key) as client:
             # Get or create tags
-            tag_id = await client.get_or_create_tag(config.tag_name)
+            if dry_run:
+                tag = await client.get_tag(config.tag_name)
+                if tag:
+                    tag_id = int(tag["id"])
+                else:
+                    console.print(f"[yellow]Would create tag '{config.tag_name}'[/yellow]")
+                    tag_id = -1
+            else:
+                tag_id = await client.get_or_create_tag(config.tag_name)
+
             ignore_tag_id = None
             if config.ignore_tag:
-                ignore_tag_id = await client.get_or_create_tag(config.ignore_tag)
+                if dry_run:
+                    tag = await client.get_tag(config.ignore_tag)
+                    if tag:
+                        ignore_tag_id = int(tag["id"])
+                    else:
+                        console.print(
+                            f"[yellow]Would create ignore tag '{config.ignore_tag}'[/yellow]"
+                        )
+                        ignore_tag_id = -2
+                else:
+                    ignore_tag_id = await client.get_or_create_tag(config.ignore_tag)
+
                 if tag_id == ignore_tag_id:
                     raise ValueError(
                         f"Tag '{config.tag_name}' and ignore tag '{config.ignore_tag}' "
@@ -107,8 +159,17 @@ async def process_application(
             elif app_name == "readarr":
                 status = config.author_status
 
-            # Get all media
-            all_media = await client.get_all_media()
+            # Get all media with spinner
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task(f"Retrieving media from {app_name.title()}...", total=None)
+                all_media = await client.get_all_media()
+                progress.update(task, completed=True)
+            
+            console.print(f"[dim]Retrieved {len(all_media)} items total[/dim]")
 
             # Filter media
             media_filter = MediaFilter(
@@ -134,8 +195,21 @@ async def process_application(
                     tagged_media = media_filter.filter_unattended(all_media)
                     if tagged_media:
                         media_ids = [item["id"] for item in tagged_media]
-                        await client.remove_tags_from_media(media_ids, tag_id)
-                        all_media = await client.get_all_media()
+                        if dry_run:
+                            console.print(
+                                f"[yellow]Would remove tag from {len(media_ids)} items[/yellow]"
+                            )
+                            # Simulate tag removal for re-filtering
+                            for item in all_media:
+                                if (
+                                    item.get("id") in media_ids
+                                    and "tags" in item
+                                    and tag_id in item["tags"]
+                                ):
+                                    item["tags"].remove(tag_id)
+                        else:
+                            await client.remove_tags_from_media(media_ids, tag_id)
+                            all_media = await client.get_all_media()
                         filtered = media_filter.filter_attended(all_media)
 
                     if not filtered:
@@ -153,28 +227,69 @@ async def process_application(
 
             # Select random media based on count
             selected = MediaFilter.select_random(filtered, config.count)
-            console.print(f"[cyan]Selected {len(selected)} items to search[/cyan]")
+            
+            # Display selected items
+            table = Table(title=f"Selected Items ({len(selected)})", box=box.SIMPLE)
+            
+            # Determine columns based on first item
+            if selected:
+                first_item = selected[0]
+                if "title" in first_item:
+                    table.add_column("Title", style="cyan")
+                    if "year" in first_item:
+                         table.add_column("Year", style="magenta")
+                elif "artistName" in first_item:
+                    table.add_column("Artist", style="cyan")
+                elif "authorName" in first_item:
+                    table.add_column("Author", style="cyan")
+                
+                # Add rows
+                for item in selected:
+                    if "title" in item:
+                        year = str(item.get("year", ""))
+                        table.add_row(item["title"], year)
+                    elif "artistName" in item:
+                        table.add_row(item["artistName"])
+                    elif "authorName" in item:
+                        table.add_row(item["authorName"])
+            
+            console.print(table)
 
             # Start searches
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=console,
-            ) as progress:
-                task = progress.add_task(
-                    f"Searching {len(selected)} items in {app_name.title()}...",
-                    total=None,
+            if dry_run:
+                console.print(
+                    f"[yellow]Would search {len(selected)} items in {app_name.title()}[/yellow]"
                 )
-                await client.search_media_batch(selected)
-                progress.update(task, completed=True)
+            else:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=console,
+                ) as progress:
+                    task = progress.add_task(
+                        f"Searching {len(selected)} items in {app_name.title()}...",
+                        total=None,
+                    )
+                    await client.search_media_batch(selected)
+                    progress.update(task, completed=True)
+                console.print(f"[cyan]Search triggered for {len(selected)} items[/cyan]")
 
             # Add tags
             media_ids = [item["id"] for item in selected]
-            await client.add_tags_to_media(media_ids, tag_id)
+            if dry_run:
+                console.print(
+                    f"[yellow]Would add tag to {len(media_ids)} items in {app_name.title()}[/yellow]"
+                )
+            else:
+                await client.add_tags_to_media(media_ids, tag_id)
+                console.print(f"[green]Added tag '{config.tag_name}' to {len(media_ids)} items[/green]")
 
             # Send notifications
             if notifications:
-                await send_completion_notification(app_name, selected, notifications)
+                if dry_run:
+                    console.print("[yellow]Would send completion notification[/yellow]")
+                else:
+                    await send_completion_notification(app_name, selected, notifications)
 
             console.print(
                 Panel(
@@ -264,11 +379,17 @@ async def send_completion_notification(
     is_flag=True,
     help="Enable verbose output",
 )
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Run in dry-run mode (do not make changes)",
+)
 @click.version_option(package_name="upgradinatorr", prog_name="upgradinatorr")
 def main(
     applications: tuple[str, ...],
     config_file: Path,
     verbose: bool,
+    dry_run: bool,
 ) -> None:
     """
     [bold cyan]Upgradinatorr[/bold cyan] - Automated media upgrade search for Starr applications.
@@ -283,16 +404,21 @@ def main(
         upgradinatorr -a radarr -c /path/to/config.conf
 
         upgradinatorr -a lidarr -a readarr --verbose
+
+        upgradinatorr -a radarr --dry-run
     """
     console.print(
         Panel.fit(
-            "[bold cyan]Upgradinatorr v3.0.0[/bold cyan]\\nMedia Upgrade Automation",
+            renderable="[bold cyan]Upgradinatorr[/bold cyan]",
+            title_align="center",
             border_style="cyan",
         )
     )
 
     if verbose:
         console.print("[dim]Verbose mode enabled[/dim]")
+    if dry_run:
+        console.print("[yellow]Running in dry-run mode[/yellow]")
 
     # Parse configuration
     try:
@@ -330,7 +456,7 @@ def main(
 
             try:
                 app_config = ApplicationConfig(**cast(dict[str, Any], config_dict[app_config_key]))
-                await process_application(app_lower, app_config, notifications)
+                await process_application(app_lower, app_config, notifications, dry_run)
             except Exception as e:
                 console.print(f"[red]Error processing {app}: {e}[/red]")
                 if verbose:
