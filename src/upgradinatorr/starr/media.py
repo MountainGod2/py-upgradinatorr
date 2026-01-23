@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 from rich.console import Console
 
-console = Console()
+console = Console(width=100)
 
 
 class MediaFilter:
