@@ -62,8 +62,10 @@ APP_COLORS: dict[str, AppColor] = {
 
 def get_app_style(app_name: str) -> str:
     """Get the color style for an application."""
-    color = APP_COLORS.get(app_name.lower(), {}).get("hex", "white")
-    return f"#{color}"
+    app_color = APP_COLORS.get(app_name.lower())
+    if app_color:
+        return f"#{app_color['hex']}"
+    return "#FFFFFF"  # Default white color
 
 
 def create_media_table(media_items: list[dict[str, Any]], app_name: str, title: str) -> Table:
