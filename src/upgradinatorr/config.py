@@ -149,10 +149,10 @@ class ApplicationConfig(BaseModel):
 
 def validate_application_name(app_name: str) -> None:
     """Validate that the application name is supported.
-    
+
     Args:
         app_name: Name of the application to validate
-        
+
     Raises:
         ValueError: If application is not supported
     """
@@ -165,7 +165,7 @@ def validate_application_name(app_name: str) -> None:
 
 def parse_ini_config(config_path: Path) -> dict[str, dict[str, str]]:
     """Parse INI configuration file into nested dictionary.
-    
+
     Also merges General section webhooks into Notifications section for backward compatibility.
     """
     config: dict[str, dict[str, str]] = {}
@@ -200,9 +200,13 @@ def parse_ini_config(config_path: Path) -> dict[str, dict[str, str]]:
     if "General" in config:
         if "Notifications" not in config:
             config["Notifications"] = {}
-        
+
         # Only copy if not already in Notifications
-        for key in ["DiscordWebhook", "NotifiarrPassthroughWebhook", "NotifiarrPassthroughDiscordChannelId"]:
+        for key in [
+            "DiscordWebhook",
+            "NotifiarrPassthroughWebhook",
+            "NotifiarrPassthroughDiscordChannelId",
+        ]:
             if key in config["General"] and key not in config["Notifications"]:
                 config["Notifications"][key] = config["General"][key]
 
