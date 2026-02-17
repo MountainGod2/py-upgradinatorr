@@ -4,7 +4,10 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
+
+# Supported Starr applications
+SUPPORTED_APPS = {"radarr", "sonarr", "lidarr", "readarr"}
 
 
 class NotificationConfig(BaseModel):
@@ -45,6 +48,17 @@ class NotificationConfig(BaseModel):
         if v and not re.match(r"^\d{17,19}$", v):
             raise ValueError("Discord channel ID must be 17-19 digits")
         return v
+
+    @model_validator(mode="after")
+    def validate_no_quotes(self) -> "NotificationConfig":
+        """Ensure no configuration values contain quotes."""
+        for field_name, field_value in self.model_dump().items():
+            if isinstance(field_value, str) and '"' in field_value:
+                raise ValueError(
+                    f"Configuration value for '{field_name}' in Notifications section contains quotes which are not allowed. "
+                    "Please remove all quotes from your configuration."
+                )
+        return self
 
 
 class ApplicationConfig(BaseModel):
@@ -121,9 +135,39 @@ class ApplicationConfig(BaseModel):
             raise ValueError("AuthorStatus must be one of: continuing, ended")
         return v
 
+    @model_validator(mode="after")
+    def validate_no_quotes(self) -> "ApplicationConfig":
+        """Ensure no configuration values contain quotes."""
+        for field_name, field_value in self.model_dump().items():
+            if isinstance(field_value, str) and '"' in field_value:
+                raise ValueError(
+                    f"Configuration value for '{field_name}' contains quotes which are not allowed. "
+                    "Please remove all quotes from your configuration."
+                )
+        return self
+
+
+def validate_application_name(app_name: str) -> None:
+    """Validate that the application name is supported.
+    
+    Args:
+        app_name: Name of the application to validate
+        
+    Raises:
+        ValueError: If application is not supported
+    """
+    if app_name.lower() not in SUPPORTED_APPS:
+        raise ValueError(
+            f"{app_name} is not a supported application. "
+            f"Supported applications: {', '.join(sorted(SUPPORTED_APPS))}"
+        )
+
 
 def parse_ini_config(config_path: Path) -> dict[str, dict[str, str]]:
-    """Parse INI configuration file into nested dictionary."""
+    """Parse INI configuration file into nested dictionary.
+    
+    Also merges General section webhooks into Notifications section for backward compatibility.
+    """
     config: dict[str, dict[str, str]] = {}
     current_section = None
 
@@ -150,5 +194,16 @@ def parse_ini_config(config_path: Path) -> dict[str, dict[str, str]]:
                 # Skip if starts with semicolon (commented out)
                 if not key.startswith(";"):
                     config[current_section][key] = value
+
+    # Merge General section webhooks into Notifications
+    # Notifications section takes precedence if both are defined
+    if "General" in config:
+        if "Notifications" not in config:
+            config["Notifications"] = {}
+        
+        # Only copy if not already in Notifications
+        for key in ["DiscordWebhook", "NotifiarrPassthroughWebhook", "NotifiarrPassthroughDiscordChannelId"]:
+            if key in config["General"] and key not in config["Notifications"]:
+                config["Notifications"][key] = config["General"][key]
 
     return config
