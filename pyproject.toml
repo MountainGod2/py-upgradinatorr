@@ -43,11 +43,11 @@ build_command = """
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py314"
 
 [tool.mypy]
 packages = "upgradinatorr"
-python_version = "3.10"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
