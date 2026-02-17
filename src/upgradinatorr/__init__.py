@@ -5,6 +5,6 @@ from importlib.metadata import version
 __version__ = version("upgradinatorr")
 __author__ = "MountainGod2"
 
-from upgradinatorr.config import ApplicationConfig, NotificationConfig
+from upgradinatorr.config import ApplicationConfig, NotificationConfig, validate_application_name
 
-__all__ = ["ApplicationConfig", "NotificationConfig"]
+__all__ = ["ApplicationConfig", "NotificationConfig", "validate_application_name"]

@@ -13,6 +13,7 @@ from upgradinatorr.config import (
     ApplicationConfig,
     NotificationConfig,
     parse_ini_config,
+    validate_application_name,
 )
 from upgradinatorr.notifications.discord import send_discord_notification
 from upgradinatorr.notifications.notifiarr import send_notifiarr_notification
@@ -132,6 +133,7 @@ async def process_application(
     config: ApplicationConfig,
     notifications: Optional[NotificationConfig] = None,
     dry_run: bool = False,
+    verbose: bool = False,
 ) -> None:
     """Process a single Starr application.
 
@@ -140,6 +142,7 @@ async def process_application(
         config: Application configuration
         notifications: Optional notification configuration
         dry_run: If True, run in dry-run mode
+        verbose: If True, enable verbose output
     """
     app_name = app_name.lower()
     app_style = get_app_style(app_name)
@@ -163,19 +166,31 @@ async def process_application(
     console.print(" | ".join(summary_parts))
     console.print()
 
+    if verbose:
+        console.print(f"[dim]Validating {app_name.title()} configuration...[/dim]")
+
     try:
         async with StarrClient(app_name, config.url, config.api_key) as client:
+            if verbose:
+                console.print(f"[dim]Retrieved API version: {client.api_version}[/dim]")
+
             # Get or create tags
             with console.status(f"[{app_style}]Checking tags...", spinner="dots"):
                 if dry_run:
                     tag = await client.get_tag(config.tag_name)
                     if tag:
                         tag_id = int(tag["id"])
+                        if verbose:
+                            console.print(
+                                f"[dim]Found tag '{config.tag_name}' with ID: {tag_id}[/dim]"
+                            )
                     else:
                         console.print(f"[yellow]- Would create tag '{config.tag_name}'[/yellow]")
                         tag_id = -1
                 else:
                     tag_id = await client.get_or_create_tag(config.tag_name)
+                    if verbose:
+                        console.print(f"[dim]Tag '{config.tag_name}' has ID: {tag_id}[/dim]")
 
                 ignore_tag_id = None
                 if config.ignore_tag:
@@ -183,6 +198,10 @@ async def process_application(
                         tag = await client.get_tag(config.ignore_tag)
                         if tag:
                             ignore_tag_id = int(tag["id"])
+                            if verbose:
+                                console.print(
+                                    f"[dim]Found ignore tag '{config.ignore_tag}' with ID: {ignore_tag_id}[/dim]"
+                                )
                         else:
                             console.print(
                                 f"[yellow]- Would create ignore tag '{config.ignore_tag}'[/yellow]"
@@ -190,6 +209,10 @@ async def process_application(
                             ignore_tag_id = -2
                     else:
                         ignore_tag_id = await client.get_or_create_tag(config.ignore_tag)
+                        if verbose:
+                            console.print(
+                                f"[dim]Ignore tag '{config.ignore_tag}' has ID: {ignore_tag_id}[/dim]"
+                            )
 
                     if tag_id == ignore_tag_id:
                         raise ValueError(
@@ -204,6 +227,10 @@ async def process_application(
                     quality_profile_id = await client.get_quality_profile_id(
                         config.quality_profile_name
                     )
+                    if verbose:
+                        console.print(
+                            f"[dim]Quality profile '{config.quality_profile_name}' has ID: {quality_profile_id}[/dim]"
+                        )
 
             # Determine status based on app type
             status = None
@@ -221,6 +248,11 @@ async def process_application(
                 f"[{app_style}]Retrieving media from {app_name.title()}...", spinner="bouncingBall"
             ) as status_spinner:
                 all_media = await client.get_all_media()
+                if verbose:
+                    console.print(
+                        f"[dim]Retrieved a total of {len(all_media)} media items from {app_name.title()}[/dim]"
+                    )
+
                 status_spinner.update(f"Filtering {len(all_media)} items...")
 
                 # Filter media
@@ -233,9 +265,22 @@ async def process_application(
                 )
 
                 if config.unattended:
+                    if verbose:
+                        console.print(
+                            f"[dim]Filtering media to only include media with the tag '{config.tag_name}'[/dim]"
+                        )
                     filtered = media_filter.filter_unattended(all_media)
                 else:
+                    if verbose:
+                        console.print(
+                            f"[dim]Filtering media to only include media without the tag '{config.tag_name}' and that are monitored[/dim]"
+                        )
                     filtered = media_filter.filter_attended(all_media)
+
+                if verbose:
+                    console.print(
+                        f"[dim]Filtered media based on configuration values, found {len(filtered)} media items to process for {app_name.title()}[/dim]"
+                    )
 
                 # Handle empty results
                 if not filtered:
@@ -473,6 +518,13 @@ def main(
         for app in applications:
             app_lower = app.lower()
 
+            # Validate application name
+            try:
+                validate_application_name(app_lower)
+            except ValueError as e:
+                console.print(f"[red]✗ {e}[/red]")
+                continue
+
             # Find config section (case-insensitive)
             app_config_key = None
             for key in config_dict.keys():
@@ -486,7 +538,7 @@ def main(
 
             try:
                 app_config = ApplicationConfig(**cast(dict[str, Any], config_dict[app_config_key]))
-                await process_application(app_lower, app_config, notifications, dry_run)
+                await process_application(app_lower, app_config, notifications, dry_run, verbose)
             except Exception as e:
                 console.print(f"[red]✗ Error processing {app}: {e}[/red]")
                 if verbose:
