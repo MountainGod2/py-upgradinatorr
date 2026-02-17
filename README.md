@@ -30,6 +30,9 @@ upgradinatorr -a radarr -c /path/to/config.conf
 
 # Enable verbose output
 upgradinatorr -a radarr --verbose
+
+# Preview processing
+upgradinatorr -a radarr --dry-run
 ```
 
 ## Configuration
