@@ -380,16 +380,16 @@ async def send_completion_notification(
         description = custom_message
     else:
         titles = [MediaFilter.get_media_title(item, app_name) for item in media_items]
-        title_list = "\\n".join(f"- {title}" for title in titles[:50])  # Limit to 50
+        title_list = "\n".join(f"- {title}" for title in titles[:50])  # Limit to 50
 
         if len(titles) > 50:
-            title_list += f"\\n... and {len(titles) - 50} more"
+            title_list += f"\n... and {len(titles) - 50} more"
 
-        description = f"Search started for {len(media_items)} media items:\\n{title_list}"
+        description = f"Search started for {len(media_items)} media items:\n{title_list}"
 
         if len(description) > 4000:
             description = (
-                f"Search started for {len(media_items)} media items.\\n\\n"
+                f"Search started for {len(media_items)} media items.\n\n"
                 "*The list is too long to display due to Discord's character limit.*"
             )
 
