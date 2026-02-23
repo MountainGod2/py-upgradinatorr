@@ -22,7 +22,6 @@ from upgradinatorr.starr.media import MediaFilter
 
 console = Console(width=100)
 
-# Configure rich-click
 click.rich_click.USE_RICH_MARKUP = True
 click.rich_click.SHOW_ARGUMENTS = True
 click.rich_click.GROUP_ARGUMENTS_OPTIONS = True
@@ -65,7 +64,7 @@ def get_app_style(app_name: str) -> str:
     app_color = APP_COLORS.get(app_name.lower())
     if app_color:
         return f"#{app_color['hex']}"
-    return "#FFFFFF"  # Default white color
+    return "#FFFFFF"
 
 
 def create_media_table(media_items: list[dict[str, Any]], app_name: str, title: str) -> Table:
@@ -73,7 +72,6 @@ def create_media_table(media_items: list[dict[str, Any]], app_name: str, title: 
     app_style = get_app_style(app_name)
     table = Table(title=title, box=box.SIMPLE, border_style=app_style)
 
-    # Determine columns based on app type
     if app_name == "radarr":
         table.add_column("Title", style="white")
         table.add_column("Year", style="cyan", justify="right")
@@ -98,7 +96,6 @@ def create_media_table(media_items: list[dict[str, Any]], app_name: str, title: 
         monitored = "✓" if item.get("monitored") else "✗"
         status = str(item.get("status", "unknown")).title()
 
-        # Color code common statuses
         if status.lower() in ["continuing", "released", "announced"]:
             status = f"[green]{status}[/green]"
         elif status.lower() in ["ended", "missing"]:
@@ -149,13 +146,11 @@ async def process_application(
     app_name = app_name.lower()
     app_style = get_app_style(app_name)
 
-    # Header
     console.print()
     console.rule(f"[{app_style}]{app_name.title()}[/{app_style}]")
     if dry_run:
         console.print("[yellow]DRY RUN MODE[/yellow]", justify="center")
 
-    # Display configuration summary
     summary_parts = [
         f"URL: [dim]{config.url}[/dim]",
         f"Count: [dim]{config.count}[/dim]",
@@ -176,7 +171,6 @@ async def process_application(
             if verbose:
                 console.print(f"[dim]Retrieved API version: {client.api_version}[/dim]")
 
-            # Get or create tags
             with console.status(f"[{app_style}]Checking tags...", spinner="dots"):
                 if dry_run:
                     tag = await client.get_tag(config.tag_name)
@@ -222,7 +216,6 @@ async def process_application(
                             "cannot be the same"
                         )
 
-            # Get quality profile ID if specified
             quality_profile_id = None
             if config.quality_profile_name:
                 with console.status(f"[{app_style}]Checking quality profile...", spinner="dots"):
@@ -234,7 +227,6 @@ async def process_application(
                             f"[dim]Quality profile '{config.quality_profile_name}' has ID: {quality_profile_id}[/dim]"
                         )
 
-            # Determine status based on app type
             status = None
             if app_name == "radarr":
                 status = config.movie_status
@@ -245,7 +237,6 @@ async def process_application(
             elif app_name == "readarr":
                 status = config.author_status
 
-            # Get all media with spinner
             with console.status(
                 f"[{app_style}]Retrieving media from {app_name.title()}...", spinner="bouncingBall"
             ) as status_spinner:
@@ -257,7 +248,6 @@ async def process_application(
 
                 status_spinner.update(f"Filtering {len(all_media)} items...")
 
-                # Filter media
                 media_filter = MediaFilter(
                     monitored=config.monitored,
                     tag_id=tag_id,
@@ -284,10 +274,8 @@ async def process_application(
                         f"[dim]Filtered media based on configuration values, found {len(filtered)} media items to process for {app_name.title()}[/dim]"
                     )
 
-                # Handle empty results
                 if not filtered:
                     if config.unattended:
-                        # Remove tag from all tagged items and re-filter
                         console.print(
                             "[yellow]No media left to process. Removing tags and re-filtering...[/yellow]"
                         )
@@ -298,7 +286,6 @@ async def process_application(
                                 console.print(
                                     f"[yellow]- Would remove tag from {len(media_ids)} items[/yellow]"
                                 )
-                                # Simulate tag removal for re-filtering
                                 for item in all_media:
                                     if (
                                         item.get("id") in media_ids
@@ -328,17 +315,14 @@ async def process_application(
                 f"[{app_style}]Found {len(filtered)} candidates matching criteria[/{app_style}]"
             )
 
-            # Select random media based on count
             selected = MediaFilter.select_random(filtered, config.count)
 
-            # Display selected items
             if selected:
                 table = create_media_table(selected, app_name, f"Selected Items ({len(selected)})")
                 console.print(table)
             else:
                 console.print("[yellow]No items selected[/yellow]")
 
-            # Start searches
             if dry_run:
                 console.print(
                     f"[yellow]- Would search {len(selected)} items in {app_name.title()}[/yellow]"
@@ -350,7 +334,6 @@ async def process_application(
                     f"[{app_style}]✓ Search triggered for {len(selected)} items[/{app_style}]"
                 )
 
-            # Add tags
             media_ids = [item["id"] for item in selected]
             if dry_run:
                 console.print(
@@ -363,7 +346,6 @@ async def process_application(
                     f"[green]✓ Added tag '{config.tag_name}' to {len(media_ids)} items[/green]"
                 )
 
-            # Send notifications
             if notifications:
                 if dry_run:
                     console.print("[yellow]- Would send completion notification[/yellow]")
@@ -411,7 +393,6 @@ async def send_completion_notification(
                 "*The list is too long to display due to Discord's character limit.*"
             )
 
-    # Send Discord notification
     if notifications.discord_webhook:
         await send_discord_notification(
             webhook_url=notifications.discord_webhook,
@@ -421,7 +402,6 @@ async def send_completion_notification(
             thumbnail_url=colors["thumbnail"],
         )
 
-    # Send Notifiarr notification
     if notifications.notifiarr_webhook and notifications.notifiarr_channel_id:
         await send_notifiarr_notification(
             webhook_url=notifications.notifiarr_webhook,
@@ -485,7 +465,6 @@ def main(
 
         upgradinatorr -a radarr --dry-run
     """
-    # Header
     console.rule("[bold cyan]Upgradinatorr[/bold cyan]")
 
     if verbose:
@@ -493,7 +472,6 @@ def main(
     if dry_run:
         console.print("[yellow]Running in DRY-RUN mode[/yellow]", justify="center")
 
-    # Parse configuration
     try:
         config_dict = parse_ini_config(config_file)
     except FileNotFoundError:
@@ -503,7 +481,6 @@ def main(
         console.print(f"[red]Error parsing configuration: {e}[/red]")
         raise click.Abort()
 
-    # Parse notifications config
     notifications = None
     if "Notifications" in config_dict:
         try:
@@ -511,7 +488,6 @@ def main(
         except Exception as e:
             console.print(f"[yellow]Warning: Invalid notification config: {e}[/yellow]")
 
-    # Process each application
     async def run_all() -> None:
         console.print(
             f"\n[bold]Processing {len(applications)} application(s):[/bold] {', '.join(applications)}"
@@ -520,14 +496,12 @@ def main(
         for app in applications:
             app_lower = app.lower()
 
-            # Validate application name
             try:
                 validate_application_name(app_lower)
             except ValueError as e:
                 console.print(f"[red]✗ {e}[/red]")
                 continue
 
-            # Find config section (case-insensitive)
             app_config_key = None
             for key in config_dict.keys():
                 if key.lower() == app_lower:
