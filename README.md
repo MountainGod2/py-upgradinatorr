@@ -23,7 +23,7 @@ pip install -e .
 upgradinatorr -a radarr
 
 # Process multiple applications
-upgradinatorr -a radarr -a sonarr
+upgradinatorr -a radarr,sonarr
 
 # Use custom config file
 upgradinatorr -a radarr -c /path/to/config.conf

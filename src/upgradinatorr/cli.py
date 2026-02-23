@@ -457,11 +457,11 @@ def main(
 
     [bold]Examples:[/bold]
 
-        upgradinatorr -a radarr -a sonarr
+        upgradinatorr -a radarr,sonarr
 
         upgradinatorr -a radarr -c /path/to/config.conf
 
-        upgradinatorr -a lidarr -a readarr --verbose
+        upgradinatorr -a lidarr,readarr --verbose
 
         upgradinatorr -a radarr --dry-run
     """
@@ -471,6 +471,11 @@ def main(
         console.print("[dim]Verbose mode enabled[/dim]", justify="center")
     if dry_run:
         console.print("[yellow]Running in DRY-RUN mode[/yellow]", justify="center")
+
+    app_list = []
+    for app in applications:
+        app_list.extend([a.strip() for a in app.split(",")])
+    applications = tuple(app_list)
 
     try:
         config_dict = parse_ini_config(config_file)
