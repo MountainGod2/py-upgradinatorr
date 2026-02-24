@@ -35,6 +35,45 @@ upgradinatorr -a radarr --verbose
 upgradinatorr -a radarr --dry-run
 ```
 
+### Docker Usage
+
+Run with docker:
+
+```bash
+docker run --rm \
+  -e PUID=99 \
+  -e PGID=100 \
+  -v /path/to/config:/config \
+  mountaingod2/upgradinatorr:develop \
+  -a radarr,sonarr --verbose
+```
+
+Or use docker-compose:
+
+```yaml
+version: '3.8'
+
+services:
+  upgradinatorr:
+    image: mountaingod2/upgradinatorr:develop
+    container_name: upgradinatorr
+    environment:
+      - PUID=99  # Set to your user ID (run `id -u`)
+      - PGID=100  # Set to your group ID (run `id -g`)
+    volumes:
+      - /path/to/config:/config
+    command: ["-a", "radarr,sonarr", "--verbose"]
+```
+
+**Environment Variables:**
+- `PUID` - User ID to run as (default: 999)
+- `PGID` - Group ID to run as (default: 999)
+
+**Volumes:**
+- `/config` - Directory containing your `upgradinatorr.conf` file
+
+The container will automatically create a default config file from the example if one doesn't exist.
+
 ## Configuration
 
 Create a `upgradinatorr.conf` file (see example in repository):
