@@ -7,6 +7,10 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
+# HTTP status code range for successful responses
+HTTP_SUCCESS_MIN = 200
+HTTP_SUCCESS_MAX = 300
+
 
 class NotifiarrNotificationError(Exception):
     """Raised when a Notifiarr notification fails to send."""
@@ -74,7 +78,7 @@ async def send_notifiarr_notification(
             headers={"Accept": "text/plain"},
         ) as response,
     ):
-        if response.status != 200:  # noqa: PLR2004
+        if not (HTTP_SUCCESS_MIN <= response.status < HTTP_SUCCESS_MAX):
             msg = f"Notifiarr webhook returned {response.status}"
             raise NotifiarrNotificationError(
                 msg,
