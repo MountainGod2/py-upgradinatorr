@@ -4,6 +4,43 @@ import random
 from typing import Any
 
 
+def select_random_media(media: list[dict[str, Any]], count: int | str) -> list[dict[str, Any]]:
+    """Select random media items based on count.
+
+    Args:
+        media: List of media items
+        count: Number of items to select, or "max" for all
+
+    Returns:
+        Selected media items
+
+    """
+    if count == "max":
+        return media
+
+    count_int = int(count) if isinstance(count, str) else count
+    return random.sample(media, min(count_int, len(media)))
+
+
+def get_media_title(item: dict[str, Any], app_name: str) -> str:
+    """Get the title/name of a media item based on app type.
+
+    Args:
+        item: Media item dictionary
+        app_name: Application name (radarr, sonarr, etc.)
+
+    Returns:
+        Title or name of the media item
+    """
+    title_fields = {
+        "radarr": "title",
+        "sonarr": "title",
+        "lidarr": "artistName",
+        "readarr": "authorName",
+    }
+    return str(item.get(title_fields.get(app_name, "title"), "Unknown"))
+
+
 class MediaFilter:
     """Filter media items based on configuration criteria."""
 
@@ -60,32 +97,3 @@ class MediaFilter:
             filtered = [item for item in filtered if self.ignore_tag_id not in item.get("tags", [])]
 
         return filtered
-
-    @staticmethod
-    def select_random(media: list[dict[str, Any]], count: int | str) -> list[dict[str, Any]]:
-        """Select random media items based on count.
-
-        Args:
-            media: List of media items
-            count: Number of items to select, or "max" for all
-
-        Returns:
-            Selected media items
-
-        """
-        if count == "max":
-            return media
-
-        count_int = int(count) if isinstance(count, str) else count
-        return random.sample(media, min(count_int, len(media)))
-
-    @staticmethod
-    def get_media_title(item: dict[str, Any], app_name: str) -> str:
-        """Get the title/name of a media item based on app type."""
-        title_fields = {
-            "radarr": "title",
-            "sonarr": "title",
-            "lidarr": "artistName",
-            "readarr": "authorName",
-        }
-        return str(item.get(title_fields.get(app_name, "title"), "Unknown"))

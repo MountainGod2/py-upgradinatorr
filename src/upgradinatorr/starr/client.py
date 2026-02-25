@@ -11,6 +11,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# HTTP status code range for successful responses
+HTTP_SUCCESS_MIN = 200
+HTTP_SUCCESS_MAX = 300
+
 
 class StarrAPIError(Exception):
     """Raised when Starr API returns an error."""
@@ -45,6 +49,15 @@ class StarrClient:
         "sonarr": ("series/editor", "seriesIds"),
         "lidarr": ("artist/editor", "artistIds"),
         "readarr": ("author/editor", "authorIds"),
+    }
+
+    ERROR_MESSAGES: ClassVar[dict[int, str]] = {
+        302: "Redirect - are you missing a URL base path?",
+        400: "Bad Request - check your configuration",
+        401: "Unauthorized - check your API key",
+        404: "Not Found - check your URL",
+        409: "Conflict - check your configuration",
+        500: "Internal Server Error",
     }
 
     def __init__(self, app_name: str, url: str, api_key: str) -> None:
@@ -108,15 +121,7 @@ class StarrClient:
 
         async with self._session.request(method, url, **kwargs) as response:
             if not response.ok:
-                error_messages = {
-                    302: "Redirect - are you missing a URL base path?",
-                    400: "Bad Request - check your configuration",
-                    401: "Unauthorized - check your API key",
-                    404: "Not Found - check your URL",
-                    409: "Conflict - check your configuration",
-                    500: "Internal Server Error",
-                }
-                message = error_messages.get(
+                message = self.ERROR_MESSAGES.get(
                     response.status,
                     f"unexpected status {response.status}",
                 )
@@ -132,7 +137,7 @@ class StarrClient:
 
         url = f"{self.base_url}/api"
         async with self._session.get(url) as response:
-            if response.status != 200:  # noqa: PLR2004
+            if not (HTTP_SUCCESS_MIN <= response.status < HTTP_SUCCESS_MAX):
                 raise StarrAPIError(response.status, "failed to get API version", self.app_name)
             data = await response.json()
             return cast("str", data["current"])
