@@ -365,11 +365,7 @@ async def _handle_unattended_mode(
                 f"[yellow]  would remove tag from {len(media_ids)} items[/yellow]",
             )
             for item in all_media:
-                if (
-                    item.get("id") in media_ids
-                    and "tags" in item
-                    and tag_id in item["tags"]
-                ):
+                if item.get("id") in media_ids and "tags" in item and tag_id in item["tags"]:
                     item["tags"].remove(tag_id)
         else:
             await client.remove_tags_from_media(media_ids, tag_id)
