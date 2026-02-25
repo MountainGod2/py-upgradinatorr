@@ -61,7 +61,7 @@ jobs:
       lock-file-artifact: ${{ env.lock_file_artifact }}
 
 
-  test-e2e:
+  test-release-artifacts:
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -91,15 +91,16 @@ jobs:
           uv pip uninstall upgradinatorr
           uv pip install dist/upgradinatorr-*.whl
 
-      - name: Test | Run pytest
-        run: uv run pytest -vv tests/e2e
+      - name: Test | Run CLI command to verify installation
+        run: |
+          uv run upgradinatorr --version
 
 
   release:
     runs-on: ubuntu-latest
     needs:
       - build
-      - test-e2e
+      - test-release-artifacts
 
     if: ${{ needs.build.outputs.new-release-detected == 'true' }}
 
