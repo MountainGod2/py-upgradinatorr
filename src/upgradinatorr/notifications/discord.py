@@ -1,11 +1,14 @@
 """Discord webhook notifications."""
 
-from typing import Optional
+import logging
 
 import aiohttp
-from rich.console import Console
 
-console = Console()
+logger = logging.getLogger(__name__)
+
+
+class DiscordNotificationError(Exception):
+    """Raised when a Discord notification fails to send."""
 
 
 async def send_discord_notification(
@@ -13,7 +16,7 @@ async def send_discord_notification(
     title: str,
     description: str,
     color: int,
-    thumbnail_url: Optional[str] = None,
+    thumbnail_url: str | None = None,
     username: str = "Upgradinatorr",
     avatar_url: str = "https://gh.notifiarr.com/images/icons/powershell.png",
 ) -> None:
@@ -27,6 +30,10 @@ async def send_discord_notification(
         thumbnail_url: Optional thumbnail URL
         username: Webhook username
         avatar_url: Webhook avatar URL
+
+    Raises:
+        DiscordNotificationError: If the webhook request fails.
+
     """
     payload = {
         "username": username,
@@ -37,13 +44,18 @@ async def send_discord_notification(
                 "description": description,
                 "color": color,
                 "thumbnail": {"url": thumbnail_url} if thumbnail_url else None,
-            }
+            },
         ],
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(webhook_url, json=payload) as response:
-            if response.status in range(200, 300):
-                console.log("[green]Discord notification sent successfully[/green]")
-            else:
-                console.log(f"[red]Failed to send Discord notification: {response.status}[/red]")
+    async with (
+        aiohttp.ClientSession() as session,
+        session.post(webhook_url, json=payload) as response,
+    ):
+        if response.status not in range(200, 300):
+            msg = f"Discord webhook returned {response.status}"
+            raise DiscordNotificationError(
+                msg,
+            )
+
+    logger.debug("Discord notification sent")

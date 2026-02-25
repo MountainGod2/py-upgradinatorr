@@ -1,18 +1,22 @@
 """Starr application API client."""
 
 import asyncio
-from typing import Any, Optional, cast
+import logging
+from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 
 import aiohttp
-from rich.console import Console
 
-console = Console(width=100)
+if TYPE_CHECKING:
+    from types import TracebackType
+
+logger = logging.getLogger(__name__)
 
 
 class StarrAPIError(Exception):
     """Raised when Starr API returns an error."""
 
     def __init__(self, status: int, message: str, application: str) -> None:
+        """Initialize API error with status, message, and application name."""
         self.status = status
         self.message = message
         self.application = application
@@ -22,21 +26,21 @@ class StarrAPIError(Exception):
 class StarrClient:
     """Async client for interacting with Starr application APIs."""
 
-    ENDPOINTS = {
+    ENDPOINTS: ClassVar = {
         "radarr": "movie",
         "sonarr": "series",
         "lidarr": "artist",
         "readarr": "author",
     }
 
-    SEARCH_COMMANDS = {
+    SEARCH_COMMANDS: ClassVar = {
         "radarr": "MoviesSearch",
         "sonarr": "SeriesSearch",
         "lidarr": "ArtistSearch",
         "readarr": "AuthorSearch",
     }
 
-    EDITOR_ENDPOINTS = {
+    EDITOR_ENDPOINTS: ClassVar = {
         "radarr": ("movie/editor", "movieIds"),
         "sonarr": ("series/editor", "seriesIds"),
         "lidarr": ("artist/editor", "artistIds"),
@@ -50,28 +54,37 @@ class StarrClient:
             app_name: Name of the application (radarr, sonarr, lidarr, readarr)
             url: Base URL of the application
             api_key: API key for authentication
+
         """
         self.app_name = app_name.lower()
         self.base_url = url.rstrip("/")
         self.api_key = api_key
-        self.api_version: Optional[str] = None
-        self._session: Optional[aiohttp.ClientSession] = None
+        self.api_version: str | None = None
+        self._session: aiohttp.ClientSession | None = None
 
-    async def __aenter__(self) -> "StarrClient":
+    async def __aenter__(self) -> Self:
         """Async context manager entry."""
         self._session = aiohttp.ClientSession(
-            headers={"X-Api-Key": self.api_key, "Content-Type": "application/json"}
+            headers={"X-Api-Key": self.api_key, "Content-Type": "application/json"},
         )
         self.api_version = await self._get_api_version()
         return self
 
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """Async context manager exit."""
         if self._session:
             await self._session.close()
 
     async def _request(
-        self, method: str, endpoint: str, **kwargs: Any
+        self,
+        method: str,
+        endpoint: str,
+        **kwargs: Any,  # noqa: ANN401
     ) -> dict[str, Any] | list[dict[str, Any]]:
         """Make HTTP request to Starr API.
 
@@ -85,45 +98,44 @@ class StarrClient:
 
         Raises:
             StarrAPIError: If API returns an error status
+
         """
         if not self._session:
-            raise RuntimeError("Client not initialized. Use async with statement.")
+            msg = "Client not initialized. Use async with statement."
+            raise RuntimeError(msg)
 
         url = f"{self.base_url}/api/{self.api_version}/{endpoint}"
 
         async with self._session.request(method, url, **kwargs) as response:
-            if response.status >= 400:
+            if not response.ok:
                 error_messages = {
-                    302: "Redirect - Are you missing the URL base?",
-                    400: "Bad Request - Please check your configuration",
-                    401: "Unauthorized - Please check your API key",
-                    404: "Not Found - Please check your configuration",
-                    409: "Conflict - Please check your configuration",
-                    500: "Internal Server Error - Please check your configuration",
+                    302: "Redirect - are you missing a URL base path?",
+                    400: "Bad Request - check your configuration",
+                    401: "Unauthorized - check your API key",
+                    404: "Not Found - check your URL",
+                    409: "Conflict - check your configuration",
+                    500: "Internal Server Error",
                 }
-
                 message = error_messages.get(
-                    response.status, f"Unexpected status code {response.status}"
+                    response.status,
+                    f"unexpected status {response.status}",
                 )
                 raise StarrAPIError(response.status, message, self.app_name)
 
-            return cast(dict[str, Any] | list[dict[str, Any]], await response.json())
+            return cast("dict[str, Any] | list[dict[str, Any]]", await response.json())
 
     async def _get_api_version(self) -> str:
         """Get current API version from application."""
         if not self._session:
-            raise RuntimeError("Client not initialized")
+            msg = "Client not initialized"
+            raise RuntimeError(msg)
 
         url = f"{self.base_url}/api"
         async with self._session.get(url) as response:
-            if response.status != 200:
-                raise StarrAPIError(
-                    response.status,
-                    "Failed to get API version",
-                    self.app_name,
-                )
+            if response.status != 200:  # noqa: PLR2004
+                raise StarrAPIError(response.status, "failed to get API version", self.app_name)
             data = await response.json()
-            return cast(str, data["current"])
+            return cast("str", data["current"])
 
     async def get_all_media(self) -> list[dict[str, Any]]:
         """Get all media items from the application."""
@@ -131,7 +143,7 @@ class StarrClient:
         media = await self._request("GET", endpoint)
         return media if isinstance(media, list) else []
 
-    async def get_tag(self, tag_name: str) -> Optional[dict[str, Any]]:
+    async def get_tag(self, tag_name: str) -> dict[str, Any] | None:
         """Get tag by name, returns None if not found."""
         tags = await self._request("GET", "tag")
         if isinstance(tags, list):
@@ -150,7 +162,6 @@ class StarrClient:
         tag = await self.get_tag(tag_name)
         if tag:
             return int(tag["id"])
-
         new_tag = await self.create_tag(tag_name)
         return int(new_tag["id"])
 
@@ -161,60 +172,57 @@ class StarrClient:
             for profile in profiles:
                 if profile.get("name") == profile_name:
                     return int(profile["id"])
-
-        raise ValueError(f"Quality profile '{profile_name}' not found in {self.app_name.title()}")
+        msg = f"quality profile '{profile_name}' not found in {self.app_name}"
+        raise ValueError(msg)
 
     async def add_tags_to_media(self, media_ids: list[int], tag_id: int) -> None:
         """Add tag to multiple media items."""
         endpoint, id_key = self.EDITOR_ENDPOINTS[self.app_name]
-
-        body = {id_key: media_ids, "tags": [tag_id], "applyTags": "add"}
-
-        await self._request("PUT", endpoint, json=body)
+        await self._request(
+            "PUT",
+            endpoint,
+            json={id_key: media_ids, "tags": [tag_id], "applyTags": "add"},
+        )
 
     async def remove_tags_from_media(self, media_ids: list[int], tag_id: int) -> None:
         """Remove tag from multiple media items."""
         endpoint, id_key = self.EDITOR_ENDPOINTS[self.app_name]
-
-        body = {id_key: media_ids, "tags": [tag_id], "applyTags": "remove"}
-
-        await self._request("PUT", endpoint, json=body)
+        await self._request(
+            "PUT",
+            endpoint,
+            json={id_key: media_ids, "tags": [tag_id], "applyTags": "remove"},
+        )
 
     async def search_media(self, media_id: int) -> None:
         """Trigger search for a single media item."""
         command = self.SEARCH_COMMANDS[self.app_name]
-
-        # Build the appropriate body based on app type
         if self.app_name == "radarr":
             body: dict[str, Any] = {"name": command, "movieIds": [media_id]}
         else:
-            # Sonarr, Lidarr, Readarr use singular ID
             object_name = self.ENDPOINTS[self.app_name]
-            id_field = f"{object_name}Id"
-            body = {"name": command, id_field: media_id}
-
+            body = {"name": command, f"{object_name}Id": media_id}
         await self._request("POST", "command", json=body)
 
     async def search_media_batch(self, media_items: list[dict[str, Any]]) -> None:
-        """Search for multiple media items."""
-        # Radarr supports batch search, others need individual searches
+        """Search for multiple media items.
+
+        Radarr supports batch search; Sonarr, Lidarr, and Readarr require individual requests
+        dispatched concurrently via a semaphore-limited gather.
+        """
         if self.app_name == "radarr":
             media_ids = [item["id"] for item in media_items]
-            body = {"name": "MoviesSearch", "movieIds": media_ids}
-            await self._request("POST", "command", json=body)
+            await self._request(
+                "POST",
+                "command",
+                json={"name": "MoviesSearch", "movieIds": media_ids},
+            )
         else:
-            # Search one at a time for Sonarr/Lidarr/Readarr
-            # Use a semaphore to limit concurrent requests
             semaphore = asyncio.Semaphore(10)
 
-            async def logged_search(media_id: int) -> None:
+            async def _search(media_id: int) -> None:
                 async with semaphore:
                     await self.search_media(media_id)
 
-            tasks = [logged_search(item["id"]) for item in media_items]
-            await asyncio.gather(*tasks)
+            await asyncio.gather(*[_search(item["id"]) for item in media_items])
 
-        console.log(
-            f"[cyan]Started search for {len(media_items)} media items in "
-            f"{self.app_name.title()}[/cyan]"
-        )
+        logger.debug("search queued for %d items in %s", len(media_items), self.app_name)

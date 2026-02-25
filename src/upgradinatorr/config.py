@@ -1,12 +1,13 @@
 """Configuration management for Upgradinatorr."""
 
 import re
-from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-# Supported Starr applications
+if TYPE_CHECKING:
+    from pathlib import Path
+
 SUPPORTED_APPS = {"radarr", "sonarr", "lidarr", "readarr"}
 
 
@@ -15,48 +16,60 @@ class NotificationConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    discord_webhook: Optional[str] = Field(None, alias="DiscordWebhook")
-    notifiarr_webhook: Optional[str] = Field(None, alias="NotifiarrPassthroughWebhook")
-    notifiarr_channel_id: Optional[str] = Field(None, alias="NotifiarrPassthroughDiscordChannelId")
+    discord_webhook: str | None = Field(None, alias="DiscordWebhook")
+    notifiarr_webhook: str | None = Field(None, alias="NotifiarrPassthroughWebhook")
+    notifiarr_channel_id: str | None = Field(None, alias="NotifiarrPassthroughDiscordChannelId")
 
     @field_validator("discord_webhook")
     @classmethod
-    def validate_discord_webhook(cls, v: Optional[str]) -> Optional[str]:
+    def validate_discord_webhook(cls, v: str | None) -> str | None:
+        """Validate that the Discord webhook URL is in the correct format."""
         if v and not re.match(r"https://discord\.com/api/webhooks/\d{17,19}/[A-Za-z0-9_-]{68,}", v):
+            msg = "Discord webhook must match format: https://discord.com/api/webhooks/ID/TOKEN"
             raise ValueError(
-                "Discord webhook must match format: https://discord.com/api/webhooks/ID/TOKEN"
+                msg,
             )
         return v
 
     @field_validator("notifiarr_webhook")
     @classmethod
-    def validate_notifiarr_webhook(cls, v: Optional[str]) -> Optional[str]:
+    def validate_notifiarr_webhook(cls, v: str | None) -> str | None:
+        """Validate that the Notifiarr webhook URL is in the correct format."""
         if v and not re.match(
             r"https://notifiarr\.com/api/v1/notification/passthrough/"
             r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
             v,
         ):
-            raise ValueError(
+            msg = (
                 "Notifiarr webhook must match format: "
                 "https://notifiarr.com/api/v1/notification/passthrough/UUID"
+            )
+            raise ValueError(
+                msg,
             )
         return v
 
     @field_validator("notifiarr_channel_id")
     @classmethod
-    def validate_channel_id(cls, v: Optional[str]) -> Optional[str]:
+    def validate_channel_id(cls, v: str | None) -> str | None:
+        """Validate that the Notifiarr Discord channel ID is 17-19 digits."""
         if v and not re.match(r"^\d{17,19}$", v):
-            raise ValueError("Discord channel ID must be 17-19 digits")
+            msg = "Discord channel ID must be 17-19 digits"
+            raise ValueError(msg)
         return v
 
     @model_validator(mode="after")
-    def validate_no_quotes(self) -> "NotificationConfig":
+    def validate_no_quotes(self) -> NotificationConfig:
         """Ensure no configuration values contain quotes."""
         for field_name, field_value in self.model_dump().items():
             if isinstance(field_value, str) and '"' in field_value:
-                raise ValueError(
-                    f"Configuration value for '{field_name}' in Notifications section contains quotes which are not allowed. "
+                msg = (
+                    f"Configuration value for '{field_name}' in Notifications section "
+                    "contains quotes which are not allowed. "
                     "Please remove all quotes from your configuration."
+                )
+                raise ValueError(
+                    msg,
                 )
         return self
 
@@ -72,77 +85,93 @@ class ApplicationConfig(BaseModel):
     monitored: bool = Field(default=True, alias="Monitored")
     unattended: bool = Field(default=False, alias="Unattended")
     tag_name: str = Field(..., alias="TagName", min_length=1)
-    ignore_tag: Optional[str] = Field(None, alias="IgnoreTag")
-    quality_profile_name: Optional[str] = Field(None, alias="QualityProfileName")
+    ignore_tag: str | None = Field(None, alias="IgnoreTag")
+    quality_profile_name: str | None = Field(None, alias="QualityProfileName")
 
     # Application-specific status fields
-    movie_status: Optional[str] = Field(None, alias="MovieStatus")
-    series_status: Optional[str] = Field(None, alias="SeriesStatus")
-    artist_status: Optional[str] = Field(None, alias="ArtistStatus")
-    author_status: Optional[str] = Field(None, alias="AuthorStatus")
+    movie_status: str | None = Field(None, alias="MovieStatus")
+    series_status: str | None = Field(None, alias="SeriesStatus")
+    artist_status: str | None = Field(None, alias="ArtistStatus")
+    author_status: str | None = Field(None, alias="AuthorStatus")
 
     @field_validator("url")
     @classmethod
     def validate_url(cls, v: str) -> str:
+        """Validate that the URL starts with http:// or https:// and does not end with a slash."""
         if not v.startswith(("http://", "https://")):
-            raise ValueError("URL must start with http:// or https://")
+            msg = "URL must start with http:// or https://"
+            raise ValueError(msg)
         return v.rstrip("/")
 
     @field_validator("count")
     @classmethod
     def validate_count(cls, v: str | int) -> str | int:
+        """Validate that count is a positive integer or 'max'."""
         if isinstance(v, str):
             if v.lower() == "max":
                 return "max"
             try:
                 v = int(v)
-            except ValueError:
-                raise ValueError("Count must be 'max' or a positive integer")
+            except ValueError as e:
+                msg = "Count must be 'max' or a positive integer"
+                raise ValueError(msg) from e
 
         if v < 1:
-            raise ValueError("Count must be greater than 0")
+            msg = "Count must be greater than 0"
+            raise ValueError(msg)
         return v
 
     @field_validator("movie_status")
     @classmethod
-    def validate_movie_status(cls, v: Optional[str]) -> Optional[str]:
+    def validate_movie_status(cls, v: str | None) -> str | None:
+        """Validate that the movie status is one of the allowed values."""
         if v == "in cinemas":
             v = "inCinemas"
         if v and v not in ["tba", "announced", "inCinemas", "released", "deleted"]:
+            msg = "MovieStatus must be one of: tba, announced, inCinemas, released, deleted"
             raise ValueError(
-                "MovieStatus must be one of: tba, announced, inCinemas, released, deleted"
+                msg,
             )
         return v
 
     @field_validator("series_status")
     @classmethod
-    def validate_series_status(cls, v: Optional[str]) -> Optional[str]:
+    def validate_series_status(cls, v: str | None) -> str | None:
+        """Validate that the series status is one of the allowed values."""
         if v and v not in ["continuing", "ended", "upcoming", "deleted"]:
-            raise ValueError("SeriesStatus must be one of: continuing, ended, upcoming, deleted")
+            msg = "SeriesStatus must be one of: continuing, ended, upcoming, deleted"
+            raise ValueError(msg)
         return v
 
     @field_validator("artist_status")
     @classmethod
-    def validate_artist_status(cls, v: Optional[str]) -> Optional[str]:
+    def validate_artist_status(cls, v: str | None) -> str | None:
+        """Validate that the artist status is one of the allowed values."""
         if v and v not in ["continuing", "ended"]:
-            raise ValueError("ArtistStatus must be one of: continuing, ended")
+            msg = "ArtistStatus must be one of: continuing, ended"
+            raise ValueError(msg)
         return v
 
     @field_validator("author_status")
     @classmethod
-    def validate_author_status(cls, v: Optional[str]) -> Optional[str]:
+    def validate_author_status(cls, v: str | None) -> str | None:
+        """Validate that the author status is one of the allowed values."""
         if v and v not in ["continuing", "ended"]:
-            raise ValueError("AuthorStatus must be one of: continuing, ended")
+            msg = "AuthorStatus must be one of: continuing, ended"
+            raise ValueError(msg)
         return v
 
     @model_validator(mode="after")
-    def validate_no_quotes(self) -> "ApplicationConfig":
+    def validate_no_quotes(self) -> ApplicationConfig:
         """Ensure no configuration values contain quotes."""
         for field_name, field_value in self.model_dump().items():
             if isinstance(field_value, str) and '"' in field_value:
+                msg = (
+                    f"Configuration value for '{field_name}' contains quotes "
+                    "which are not allowed. Please remove all quotes from your configuration."
+                )
                 raise ValueError(
-                    f"Configuration value for '{field_name}' contains quotes which are not allowed. "
-                    "Please remove all quotes from your configuration."
+                    msg,
                 )
         return self
 
@@ -155,11 +184,15 @@ def validate_application_name(app_name: str) -> None:
 
     Raises:
         ValueError: If application is not supported
+
     """
     if app_name.lower() not in SUPPORTED_APPS:
-        raise ValueError(
+        msg = (
             f"{app_name} is not a supported application. "
             f"Supported applications: {', '.join(sorted(SUPPORTED_APPS))}"
+        )
+        raise ValueError(
+            msg,
         )
 
 
@@ -171,37 +204,31 @@ def parse_ini_config(config_path: Path) -> dict[str, dict[str, str]]:
     config: dict[str, dict[str, str]] = {}
     current_section = None
 
-    with open(config_path) as f:
-        for line in f:
-            line = line.strip()
+    with config_path.open() as f:
+        for raw_line in f:
+            line = raw_line.strip()
 
-            # Skip empty lines and comments
             if not line or line.startswith(";"):
                 continue
 
-            # Section header
             if line.startswith("[") and line.endswith("]"):
                 current_section = line[1:-1]
                 config[current_section] = {}
                 continue
 
-            # Key-value pair
             if "=" in line and current_section:
                 key, value = line.split("=", 1)
                 key = key.strip()
                 value = value.strip()
 
-                # Skip if starts with semicolon (commented out)
                 if not key.startswith(";"):
                     config[current_section][key] = value
 
-    # Merge General section webhooks into Notifications
     # Notifications section takes precedence if both are defined
     if "General" in config:
         if "Notifications" not in config:
             config["Notifications"] = {}
 
-        # Only copy if not already in Notifications
         for key in [
             "DiscordWebhook",
             "NotifiarrPassthroughWebhook",

@@ -1,11 +1,7 @@
 """Media filtering logic for Starr applications."""
 
 import random
-from typing import Any, Optional
-
-from rich.console import Console
-
-console = Console(width=100)
+from typing import Any
 
 
 class MediaFilter:
@@ -13,11 +9,12 @@ class MediaFilter:
 
     def __init__(
         self,
+        *,
         monitored: bool,
         tag_id: int,
-        status: Optional[str] = None,
-        quality_profile_id: Optional[int] = None,
-        ignore_tag_id: Optional[int] = None,
+        status: str | None = None,
+        quality_profile_id: int | None = None,
+        ignore_tag_id: int | None = None,
     ) -> None:
         """Initialize media filter.
 
@@ -27,6 +24,7 @@ class MediaFilter:
             status: Optional status to filter by
             quality_profile_id: Optional quality profile ID to filter by
             ignore_tag_id: Optional tag ID to exclude from results
+
         """
         self.monitored = monitored
         self.tag_id = tag_id
@@ -50,7 +48,6 @@ class MediaFilter:
             if item.get("monitored") == self.monitored and self.tag_id not in item.get("tags", [])
         ]
 
-        # Apply optional filters
         if self.status:
             filtered = [item for item in filtered if item.get("status") == self.status]
 
@@ -74,6 +71,7 @@ class MediaFilter:
 
         Returns:
             Selected media items
+
         """
         if count == "max":
             return media

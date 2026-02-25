@@ -1,11 +1,15 @@
 """Notifiarr passthrough notifications."""
 
-from typing import Any, Optional
+import logging
+from typing import Any
 
 import aiohttp
-from rich.console import Console
 
-console = Console()
+logger = logging.getLogger(__name__)
+
+
+class NotifiarrNotificationError(Exception):
+    """Raised when a Notifiarr notification fails to send."""
 
 
 async def send_notifiarr_notification(
@@ -15,8 +19,8 @@ async def send_notifiarr_notification(
     title: str,
     description: str,
     color: str,
-    thumbnail_url: Optional[str] = None,
-    **kwargs: Any,
+    thumbnail_url: str | None = None,
+    **kwargs: Any,  # noqa: ANN401
 ) -> None:
     """Send notification via Notifiarr passthrough integration.
 
@@ -29,6 +33,10 @@ async def send_notifiarr_notification(
         color: Embed color (hex)
         thumbnail_url: Optional thumbnail URL
         **kwargs: Additional notification parameters
+
+    Raises:
+        NotifiarrNotificationError: If the webhook request fails.
+
     """
     payload = {
         "notification": {
@@ -58,15 +66,24 @@ async def send_notifiarr_notification(
         },
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            webhook_url, json=payload, headers={"Accept": "text/plain"}
-        ) as response:
-            if response.status == 200:
-                data = await response.json()
-                if data.get("result") == "success":
-                    console.log("[green]Notifiarr notification sent successfully[/green]")
-                else:
-                    console.log("[red]Notifiarr notification failed[/red]")
-            else:
-                console.log(f"[red]Failed to send Notifiarr notification: {response.status}[/red]")
+    async with (
+        aiohttp.ClientSession() as session,
+        session.post(
+            webhook_url,
+            json=payload,
+            headers={"Accept": "text/plain"},
+        ) as response,
+    ):
+        if response.status != 200:  # noqa: PLR2004
+            msg = f"Notifiarr webhook returned {response.status}"
+            raise NotifiarrNotificationError(
+                msg,
+            )
+        data = await response.json()
+        if data.get("result") != "success":
+            msg = f"Notifiarr reported failure: {data.get('result')}"
+            raise NotifiarrNotificationError(
+                msg,
+            )
+
+    logger.debug("Notifiarr notification sent")
