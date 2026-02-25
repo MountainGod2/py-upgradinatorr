@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "MountainGod2", email = "admin@reid.ca" }
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
     "aiohttp==3.13.3",
     "pydantic==2.12.5",
