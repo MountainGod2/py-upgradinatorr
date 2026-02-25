@@ -44,6 +44,21 @@ build_command = """
 [tool.ruff]
 line-length = 100
 target-version = "py314"
+preview = true
+lint.select = ["ALL"]
+lint.ignore = ["COM812"]
+lint.pydocstyle.convention = "google"
+lint.explicit-preview-rules = true
+lint.mccabe.max-complexity = 35
+lint.pylint.max-branches = 50
+lint.pylint.max-statements = 120
+lint.pylint.max-args = 10
+format.quote-style = "double"
+format.indent-style = "space"
+format.skip-magic-trailing-comma = false
+format.line-ending = "lf"
+format.docstring-code-format = true
+format.docstring-code-line-length = "dynamic"
 
 [tool.mypy]
 packages = "upgradinatorr"
@@ -51,3 +66,5 @@ python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+strict = true
+
