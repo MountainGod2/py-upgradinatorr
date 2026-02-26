@@ -1,14 +1,37 @@
 """Configuration management for Upgradinatorr."""
 
 import re
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-if TYPE_CHECKING:
-    from pathlib import Path
+SUPPORTED_APPS: set[str] = {"radarr", "sonarr", "lidarr", "readarr"}
 
-SUPPORTED_APPS = {"radarr", "sonarr", "lidarr", "readarr"}
+
+def get_application_type(app_name: str) -> str:
+    """Resolve an application instance name to a supported Starr app type.
+
+    Examples:
+        - "radarr" -> "radarr"
+        - "radarr4k" -> "radarr"
+        - "My-Sonarr" -> "sonarr"
+    """
+    lowered = app_name.lower()
+    for supported_app in _supported_apps_by_length():
+        if supported_app in lowered:
+            return supported_app
+
+    supported = ", ".join(sorted(SUPPORTED_APPS))
+    msg = f"{app_name} is not a supported application. Supported applications: {supported}"
+    raise ValueError(msg)
+
+
+def _supported_apps_by_length() -> list[str]:
+    """Return supported apps sorted longest-first for stable substring matching."""
+    supported_apps = list(SUPPORTED_APPS)
+    supported_apps.sort(key=lambda app: len(app), reverse=True)
+    return supported_apps
 
 
 class NotificationConfig(BaseModel):
@@ -59,7 +82,7 @@ class NotificationConfig(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def validate_no_quotes(self) -> NotificationConfig:
+    def validate_no_quotes(self) -> Self:
         """Ensure no configuration values contain quotes."""
         for field_name, field_value in self.model_dump().items():
             if isinstance(field_value, str) and '"' in field_value:
@@ -162,7 +185,7 @@ class ApplicationConfig(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def validate_no_quotes(self) -> ApplicationConfig:
+    def validate_no_quotes(self) -> Self:
         """Ensure no configuration values contain quotes."""
         for field_name, field_value in self.model_dump().items():
             if isinstance(field_value, str) and '"' in field_value:
@@ -186,14 +209,7 @@ def validate_application_name(app_name: str) -> None:
         ValueError: If application is not supported
 
     """
-    if app_name.lower() not in SUPPORTED_APPS:
-        msg = (
-            f"{app_name} is not a supported application. "
-            f"Supported applications: {', '.join(sorted(SUPPORTED_APPS))}"
-        )
-        raise ValueError(
-            msg,
-        )
+    get_application_type(app_name)
 
 
 def parse_ini_config(config_path: Path) -> dict[str, dict[str, str]]:
