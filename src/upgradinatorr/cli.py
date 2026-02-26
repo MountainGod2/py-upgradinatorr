@@ -14,6 +14,7 @@ from rich.table import Table
 from upgradinatorr.config import (
     ApplicationConfig,
     NotificationConfig,
+    get_application_type,
     parse_ini_config,
     validate_application_name,
 )
@@ -84,7 +85,12 @@ APP_COLORS: dict[str, AppColor] = {
 
 def get_app_style(app_name: str) -> str:
     """Get the color style for an application."""
-    app_color = APP_COLORS.get(app_name.lower())
+    try:
+        app_type = get_application_type(app_name)
+    except ValueError:
+        app_type = app_name.lower()
+
+    app_color = APP_COLORS.get(app_type)
     if app_color:
         return f"#{app_color['hex']}"
     return "#FFFFFF"
@@ -92,25 +98,30 @@ def get_app_style(app_name: str) -> str:
 
 def create_media_table(media_items: list[dict[str, Any]], app_name: str) -> Table:
     """Create a formatted table for media items."""
+    try:
+        app_type = get_application_type(app_name)
+    except ValueError:
+        app_type = app_name.lower()
+
     app_style = get_app_style(app_name)
     table = Table(box=box.SIMPLE, border_style=app_style, show_header=True, pad_edge=False)
 
-    if app_name == "radarr":
+    if app_type == "radarr":
         table.add_column("Title", style="white")
         table.add_column("Year", style="cyan", justify="right")
         table.add_column("Status", style="magenta")
         table.add_column("Mon", justify="center")
-    elif app_name == "sonarr":
+    elif app_type == "sonarr":
         table.add_column("Title", style="white")
         table.add_column("Year", style="cyan", justify="right")
         table.add_column("Status", style="magenta")
         table.add_column("Mon", justify="center")
         table.add_column("Seasons", justify="right", style="green")
-    elif app_name == "lidarr":
+    elif app_type == "lidarr":
         table.add_column("Artist", style="white")
         table.add_column("Status", style="magenta")
         table.add_column("Mon", justify="center")
-    elif app_name == "readarr":
+    elif app_type == "readarr":
         table.add_column("Author", style="white")
         table.add_column("Status", style="magenta")
         table.add_column("Mon", justify="center")
@@ -124,14 +135,14 @@ def create_media_table(media_items: list[dict[str, Any]], app_name: str) -> Tabl
         elif status.lower() in ["ended", "missing"]:
             status = f"[red]{status}[/red]"
 
-        if app_name == "radarr":
+        if app_type == "radarr":
             table.add_row(
                 item.get("title", "Unknown"),
                 str(item.get("year", "")),
                 status,
                 monitored,
             )
-        elif app_name == "sonarr":
+        elif app_type == "sonarr":
             seasons = str(
                 item.get("seasonCount", item.get("statistics", {}).get("seasonCount", "?")),
             )
@@ -142,9 +153,9 @@ def create_media_table(media_items: list[dict[str, Any]], app_name: str) -> Tabl
                 monitored,
                 seasons,
             )
-        elif app_name == "lidarr":
+        elif app_type == "lidarr":
             table.add_row(item.get("artistName", "Unknown"), status, monitored)
-        elif app_name == "readarr":
+        elif app_type == "readarr":
             table.add_row(item.get("authorName", "Unknown"), status, monitored)
 
     return table
@@ -285,9 +296,8 @@ async def _fetch_and_filter_media(
     Returns:
         List of filtered media items
     """
-    status = None
-    if app_name in STATUS_FIELDS:
-        status = getattr(config, STATUS_FIELDS[app_name], None)
+    app_type = get_application_type(app_name)
+    status = getattr(config, STATUS_FIELDS[app_type], None)
 
     with console.status(
         f"[{app_style}]Fetching media...",
@@ -345,9 +355,8 @@ async def _handle_unattended_mode(
     """
     console.print("[dim]No untagged media — cycling tags...[/dim]")
 
-    status = None
-    if app_name in STATUS_FIELDS:
-        status = getattr(config, STATUS_FIELDS[app_name], None)
+    app_type = get_application_type(app_name)
+    status = getattr(config, STATUS_FIELDS[app_type], None)
 
     media_filter = MediaFilter(
         monitored=config.monitored,
@@ -373,6 +382,13 @@ async def _handle_unattended_mode(
 
         return media_filter.filter_attended(all_media)
 
+    console.print(
+        "[yellow]No media currently has the unattended tag "
+        f"'{config.tag_name}' in {app_name.title()}. "
+        "This is usually a configuration issue; "
+        "if unexpected, open an issue at "
+        "https://github.com/mountaingod2/upgradinatorr/issues[/yellow]",
+    )
     return []
 
 
@@ -489,7 +505,7 @@ async def process_application(
                     )
 
                     if not filtered:
-                        console.print("[dim]Nothing to process[/dim]")
+                        console.print("[dim]No media left to process in unattended mode[/dim]")
                         return
                 else:
                     console.print(f"[dim]No {app_name} media matched — skipping[/dim]")
@@ -540,12 +556,13 @@ async def send_completion_notification(
     custom_message: str | None = None,
 ) -> None:
     """Send completion notification."""
-    colors = APP_COLORS.get(app_name, APP_COLORS["radarr"])
+    app_type = get_application_type(app_name)
+    colors = APP_COLORS.get(app_type, APP_COLORS["radarr"])
 
     if custom_message:
         description = custom_message
     else:
-        titles = [get_media_title(item, app_name) for item in media_items]
+        titles = [get_media_title(item, app_type) for item in media_items]
         title_list = "\n".join(f"- {title}" for title in titles[:50])
 
         if len(titles) > MAX_NOTIFICATION_ITEMS:
@@ -584,6 +601,7 @@ async def send_completion_notification(
             )
         except NotifiarrNotificationError as e:
             console.print(f"[yellow]  notifiarr: {e}[/yellow]")
+            raise
 
 
 @click.command()
@@ -593,7 +611,7 @@ async def send_completion_notification(
     "applications",
     required=True,
     multiple=True,
-    help="Starr applications to process (e.g., radarr, sonarr)",
+    help=("Config section names to process (e.g., radarr,radarr4k or sonarr-main)"),
 )
 @click.option(
     "-c",
@@ -628,7 +646,7 @@ def main(
 
     [bold]Examples:[/bold]
 
-        upgradinatorr -a radarr,sonarr
+        upgradinatorr -a radarr,radarr4k
 
         upgradinatorr -a radarr -c /path/to/config.conf
 
@@ -657,24 +675,27 @@ def main(
         try:
             notifications = NotificationConfig(**config_dict["Notifications"])
         except (ValidationError, ValueError) as e:
-            console.print(f"[yellow]  invalid notification config: {e}[/yellow]")
+            console.print(f"[red]✗ invalid notification config: {e}[/red]")
+            raise click.Abort from e
         except Exception as e:
             # Catch-all for unexpected errors during notification config parsing
             logger.exception("Unexpected error parsing notification config")
-            console.print(f"[yellow]  notification config error: {e}[/yellow]")
+            console.print(f"[red]✗ notification config error: {e}[/red]")
+            raise click.Abort from e
 
     async def run_all() -> None:
         apps_str = ", ".join(applications)
         console.print(f"[dim]{apps_str}[/dim]", justify="center")
 
         for app in applications:
-            app_lower = app.lower()
+            app_name = app.strip()
+            app_lower = app_name.lower()
 
             try:
                 validate_application_name(app_lower)
             except ValueError as e:
                 console.print(f"[red]✗ {e}[/red]")
-                continue
+                raise click.Abort from e
 
             app_config_key = None
             for key in config_dict:
@@ -684,28 +705,28 @@ def main(
 
             if not app_config_key:
                 console.print(f"[red]✗ no config section for '{app}'[/red]")
-                continue
+                raise click.Abort
 
             try:
                 app_config = ApplicationConfig(
                     **cast("dict[str, Any]", config_dict[app_config_key])
                 )
                 await process_application(
-                    app_lower, app_config, notifications, dry_run=dry_run, verbose=verbose
+                    app_name, app_config, notifications, dry_run=dry_run, verbose=verbose
                 )
             except (StarrAPIError, ValidationError, ValueError) as e:
                 # Expected errors: API issues, validation errors
                 console.print(f"[red]✗ {app}: {e}[/red]")
                 if verbose:
                     console.print_exception()
-                continue
+                raise click.Abort from e
             except Exception as e:
                 # Catch-all for unexpected errors - log for debugging
                 logger.exception("Unexpected error processing %s", app)
                 console.print(f"[red]✗ {app}: unexpected error - {e}[/red]")
                 if verbose:
                     console.print_exception()
-                continue
+                raise click.Abort from e
 
         console.print()
 
