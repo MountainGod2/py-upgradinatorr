@@ -216,6 +216,7 @@ def parse_ini_config(config_path: Path) -> dict[str, dict[str, str]]:
     """Parse INI configuration file into nested dictionary.
 
     Also merges General section webhooks into Notifications section for backward compatibility.
+    When both are defined, General section values take precedence.
     """
     config: dict[str, dict[str, str]] = {}
     current_section = None
@@ -240,7 +241,7 @@ def parse_ini_config(config_path: Path) -> dict[str, dict[str, str]]:
                 if not key.startswith(";"):
                     config[current_section][key] = value
 
-    # Notifications section takes precedence if both are defined
+    # General section takes precedence if both are defined
     if "General" in config:
         if "Notifications" not in config:
             config["Notifications"] = {}
@@ -250,7 +251,7 @@ def parse_ini_config(config_path: Path) -> dict[str, dict[str, str]]:
             "NotifiarrPassthroughWebhook",
             "NotifiarrPassthroughDiscordChannelId",
         ]:
-            if key in config["General"] and key not in config["Notifications"]:
+            if key in config["General"]:
                 config["Notifications"][key] = config["General"][key]
 
     return config
