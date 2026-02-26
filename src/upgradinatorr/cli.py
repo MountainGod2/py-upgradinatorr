@@ -35,10 +35,9 @@ click.rich_click.GROUP_ARGUMENTS_OPTIONS = True
 click.rich_click.STYLE_ERRORS_SUGGESTION = "magenta italic"
 click.rich_click.STYLE_OPTIONS_TABLE_BOX = "SIMPLE"
 
-MAX_NOTIFICATION_ITEMS = 50
-MAX_DISCORD_DESCRIPTION_LENGTH = 4000
+MAX_DISCORD_DESCRIPTION_LENGTH = 4096
 
-# Sentinel values for dry-run tag IDs (negative to distinguish from real IDs)
+# Tag IDs for dry-run mode to avoid conflicts with real tags
 DRY_RUN_TAG_ID = -1
 DRY_RUN_IGNORE_TAG_ID = -2
 
@@ -563,17 +562,18 @@ async def send_completion_notification(
         description = custom_message
     else:
         titles = [get_media_title(item, app_type) for item in media_items]
-        title_list = "\n".join(f"- {title}" for title in titles[:50])
+        title_list = "\n".join(f"- {title}" for title in titles)
 
-        if len(titles) > MAX_NOTIFICATION_ITEMS:
-            title_list += f"\n... and {len(titles) - 50} more"
-
-        description = f"Search started for {len(media_items)} media items:\n{title_list}"
+        description = (
+            f"Search started for {len(media_items)} media items in {app_name.title()}:\n"
+            f"{title_list}"
+        )
 
         if len(description) > MAX_DISCORD_DESCRIPTION_LENGTH:
             description = (
-                f"Search started for {len(media_items)} media items.\n\n"
-                f"*The list is too long to display due to Discord's character limit.*"
+                f"Search started for {len(media_items)} media items in {app_name.title()}.\n\n"
+                "- *The list of media items is too long to display here due to "
+                "Discord's character limit.*"
             )
 
     if notifications.discord_webhook:
