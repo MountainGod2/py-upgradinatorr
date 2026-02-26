@@ -1,15 +1,12 @@
 """Notifiarr passthrough notifications."""
 
 import logging
+from http import HTTPStatus
 from typing import Any
 
 import aiohttp
 
 logger = logging.getLogger(__name__)
-
-# HTTP status code range for successful responses
-HTTP_SUCCESS_MIN = 200
-HTTP_SUCCESS_MAX = 300
 
 
 class NotifiarrNotificationError(Exception):
@@ -78,7 +75,7 @@ async def send_notifiarr_notification(
             headers={"Accept": "text/plain"},
         ) as response,
     ):
-        if not (HTTP_SUCCESS_MIN <= response.status < HTTP_SUCCESS_MAX):
+        if not (HTTPStatus.OK <= response.status < HTTPStatus.MULTIPLE_CHOICES):
             msg = f"Notifiarr webhook returned {response.status}"
             raise NotifiarrNotificationError(
                 msg,

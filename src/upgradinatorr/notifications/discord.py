@@ -1,14 +1,11 @@
 """Discord webhook notifications."""
 
 import logging
+from http import HTTPStatus
 
 import aiohttp
 
 logger = logging.getLogger(__name__)
-
-# HTTP status code range for successful responses
-HTTP_SUCCESS_MIN = 200
-HTTP_SUCCESS_MAX = 300
 
 
 class DiscordNotificationError(Exception):
@@ -56,7 +53,7 @@ async def send_discord_notification(
         aiohttp.ClientSession() as session,
         session.post(webhook_url, json=payload) as response,
     ):
-        if not (HTTP_SUCCESS_MIN <= response.status < HTTP_SUCCESS_MAX):
+        if not (HTTPStatus.OK <= response.status < HTTPStatus.MULTIPLE_CHOICES):
             msg = f"Discord webhook returned {response.status}"
             raise DiscordNotificationError(
                 msg,
