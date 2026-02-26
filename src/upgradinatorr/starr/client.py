@@ -2,18 +2,15 @@
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
+from http import HTTPStatus
+from types import TracebackType
+from typing import Any, ClassVar, Self, cast
 
 import aiohttp
 
-if TYPE_CHECKING:
-    from types import TracebackType
+from upgradinatorr.config import get_application_type
 
 logger = logging.getLogger(__name__)
-
-# HTTP status code range for successful responses
-HTTP_SUCCESS_MIN = 200
-HTTP_SUCCESS_MAX = 300
 
 
 class StarrAPIError(Exception):
@@ -69,7 +66,7 @@ class StarrClient:
             api_key: API key for authentication
 
         """
-        self.app_name = app_name.lower()
+        self.app_name = get_application_type(app_name)
         self.base_url = url.rstrip("/")
         self.api_key = api_key
         self.api_version: str | None = None
@@ -137,7 +134,7 @@ class StarrClient:
 
         url = f"{self.base_url}/api"
         async with self._session.get(url) as response:
-            if not (HTTP_SUCCESS_MIN <= response.status < HTTP_SUCCESS_MAX):
+            if not (HTTPStatus.OK <= response.status < HTTPStatus.MULTIPLE_CHOICES):
                 raise StarrAPIError(response.status, "failed to get API version", self.app_name)
             data = await response.json()
             return cast("str", data["current"])
