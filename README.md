@@ -25,6 +25,9 @@ upgradinatorr -a radarr
 # Process multiple applications
 upgradinatorr -a radarr,sonarr
 
+# Process multiple instances
+upgradinatorr -a radarr,radarr4k
+
 # Use custom config file
 upgradinatorr -a radarr -c /path/to/config.conf
 
@@ -76,7 +79,10 @@ The container will automatically create a default config file from the example i
 
 ## Configuration
 
-Create a `upgradinatorr.conf` file (see example in repository):
+App arguments passed to `-a/--apps` should match your config section names (case-insensitive).
+For example, if your config has `[Radarr]` and `[Radarr4K]`, use `-a radarr,radarr4k`.
+
+Create a `upgradinatorr.conf` file (see example from [original repo](https://github.com/angrycuban13/Just-A-Bunch-Of-Starr-Scripts/blob/main/Upgradinatorr/upgradinatorr-example.conf)):
 
 ```ini
 [Notifications]
@@ -105,7 +111,7 @@ Url=http://localhost:8989
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.12+
 - aiohttp
 - rich
 - rich-click
@@ -117,4 +123,4 @@ MIT
 
 ## Credits
 
-Original PowerShell version by angrycuban13
+Original PowerShell version by [angrycuban13](https://github.com/angrycuban13/Just-A-Bunch-Of-Starr-Scripts/blob/main/Upgradinatorr/)
