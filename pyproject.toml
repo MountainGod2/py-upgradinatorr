@@ -3,9 +3,7 @@ name = "upgradinatorr"
 version = "0.1.0"
 description = "Automated media upgrade search for Starr applications"
 readme = "README.md"
-authors = [
-    { name = "MountainGod2", email = "admin@reid.ca" }
-]
+authors = [{ name = "MountainGod2", email = "admin@reid.ca" }]
 requires-python = ">=3.12"
 dependencies = [
     "aiohttp==3.13.3",
@@ -18,15 +16,13 @@ dependencies = [
 [dependency-groups]
 dev = [
     "mypy==1.19.1",
+    "pre-commit==4.5.1",
     "pytest==9.0.2",
     "pytest-asyncio==1.3.0",
     "pytest-cov==7.0.0",
     "ruff==0.14.13",
 ]
-build = [
-    "python-semantic-release==10.5.3",
-    "uv == 0.9.26",
-]
+build = ["python-semantic-release==10.5.3", "uv == 0.9.26"]
 
 [project.scripts]
 upgradinatorr = "upgradinatorr.cli:main"
@@ -43,7 +39,7 @@ build_command = """
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
+target-version = "py312"
 preview = true
 lint.select = ["ALL"]
 lint.ignore = ["COM812"]
@@ -62,9 +58,8 @@ format.docstring-code-line-length = "dynamic"
 
 [tool.mypy]
 packages = "upgradinatorr"
-python_version = "3.14"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 strict = true
-
