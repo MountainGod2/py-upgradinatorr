@@ -30,7 +30,7 @@ def get_application_type(app_name: str) -> str:
 def _supported_apps_by_length() -> list[str]:
     """Return supported apps sorted longest-first for stable substring matching."""
     supported_apps = list(SUPPORTED_APPS)
-    supported_apps.sort(key=lambda app: len(app), reverse=True)
+    supported_apps.sort(key=len, reverse=True)
     return supported_apps
 
 
