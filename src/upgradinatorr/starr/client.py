@@ -258,12 +258,13 @@ class StarrClient:
                 json={"name": "MoviesSearch", "movieIds": media_ids},
             )
         else:
-            semaphore = asyncio.Semaphore(10)
+            # Process in small chunks with a delay to prevent overwhelming indexers
+            chunk_size = 5
+            for i in range(0, len(media_items), chunk_size):
+                chunk = media_items[i : i + chunk_size]
+                await asyncio.gather(*[self.search_media(item["id"]) for item in chunk])
 
-            async def _search(media_id: int) -> None:
-                async with semaphore:
-                    await self.search_media(media_id)
-
-            await asyncio.gather(*[_search(item["id"]) for item in media_items])
+                if i + chunk_size < len(media_items):
+                    await asyncio.sleep(2.0)
 
         logger.debug("search queued for %d items in %s", len(media_items), self.app_name)
