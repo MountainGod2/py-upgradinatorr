@@ -7,10 +7,34 @@ from types import TracebackType
 from typing import Any, ClassVar, Self, cast
 
 import aiohttp
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from upgradinatorr.config import get_application_type
 
 logger = logging.getLogger(__name__)
+
+RETRYABLE_STATUS_CODES = {
+    HTTPStatus.TOO_MANY_REQUESTS,
+    HTTPStatus.INTERNAL_SERVER_ERROR,
+    HTTPStatus.BAD_GATEWAY,
+    HTTPStatus.SERVICE_UNAVAILABLE,
+    HTTPStatus.GATEWAY_TIMEOUT,
+}
+
+
+def _is_retryable_exception(exception: BaseException) -> bool:
+    """Return True when an exception should be retried."""
+    if isinstance(exception, (aiohttp.ClientError, TimeoutError, asyncio.TimeoutError)):
+        return True
+    if isinstance(exception, StarrAPIError):
+        return exception.status in RETRYABLE_STATUS_CODES
+    return False
 
 
 class StarrAPIError(Exception):
@@ -75,6 +99,7 @@ class StarrClient:
     async def __aenter__(self) -> Self:
         """Async context manager entry."""
         self._session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=30),
             headers={"X-Api-Key": self.api_key, "Content-Type": "application/json"},
         )
         self.api_version = await self._get_api_version()
@@ -90,6 +115,13 @@ class StarrClient:
         if self._session:
             await self._session.close()
 
+    @retry(
+        retry=retry_if_exception(_is_retryable_exception),
+        wait=wait_exponential(multiplier=0.5, min=1, max=8),
+        stop=stop_after_attempt(4),
+        reraise=True,
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+    )
     async def _request(
         self,
         method: str,
@@ -126,6 +158,13 @@ class StarrClient:
 
             return cast("dict[str, Any] | list[dict[str, Any]]", await response.json())
 
+    @retry(
+        retry=retry_if_exception(_is_retryable_exception),
+        wait=wait_exponential(multiplier=0.5, min=1, max=8),
+        stop=stop_after_attempt(4),
+        reraise=True,
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+    )
     async def _get_api_version(self) -> str:
         """Get current API version from application."""
         if not self._session:
