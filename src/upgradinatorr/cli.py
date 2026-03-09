@@ -109,24 +109,24 @@ def create_media_table(media_items: list[dict[str, Any]], app_name: str) -> Tabl
         table.add_column("Title", style="white")
         table.add_column("Year", style="cyan", justify="right")
         table.add_column("Status", style="magenta")
-        table.add_column("Mon", justify="center")
+        table.add_column("Monitored", justify="center")
     elif app_type == "sonarr":
         table.add_column("Title", style="white")
         table.add_column("Year", style="cyan", justify="right")
         table.add_column("Status", style="magenta")
-        table.add_column("Mon", justify="center")
+        table.add_column("Monitored", justify="center")
         table.add_column("Seasons", justify="right", style="green")
     elif app_type == "lidarr":
         table.add_column("Artist", style="white")
         table.add_column("Status", style="magenta")
-        table.add_column("Mon", justify="center")
+        table.add_column("Monitored", justify="center")
     elif app_type == "readarr":
         table.add_column("Author", style="white")
         table.add_column("Status", style="magenta")
-        table.add_column("Mon", justify="center")
+        table.add_column("Monitored", justify="center")
 
     for item in media_items:
-        monitored = "✓" if item.get("monitored") else "✗"
+        monitored = "Yes" if item.get("monitored") else "No"
         status = str(item.get("status", "unknown")).title()
 
         if status.lower() in ["continuing", "released", "announced"]:
@@ -420,17 +420,17 @@ async def _execute_search_and_tag(
     else:
         with console.status(f"[{app_style}]Searching...", spinner="dots"):
             await client.search_media_batch(selected)
-        console.print(f"[green]✓[/green] search queued for {len(selected)} items")
+        console.print(f"[green]Success:[/green] search queued for {len(selected)} items")
 
         media_ids = [item["id"] for item in selected]
         with console.status(f"[{app_style}]Tagging...", spinner="dots"):
             await client.add_tags_to_media(media_ids, tag_id)
-        console.print(f"[green]✓[/green] tagged {len(media_ids)} items")
+        console.print(f"[green]Success:[/green] tagged {len(media_ids)} items")
 
         if notifications:
             with console.status("Notifying...", spinner="dots"):
                 await send_completion_notification(app_name, selected, notifications)
-            console.print("[green]✓[/green] notification sent")
+            console.print("[green]Success:[/green] notification sent")
 
 
 async def process_application(
@@ -450,11 +450,11 @@ async def process_application(
 
     meta_parts = [
         f"[dim]{config.url}[/dim]",
-        f"count=[dim]{config.count}[/dim]",
-        f"tag=[dim]{config.tag_name}[/dim]",
+        f"count=[dim]'{config.count}'[/dim]",
+        f"tag=[dim]'{config.tag_name}'[/dim]",
     ]
     if config.ignore_tag:
-        meta_parts.append(f"ignore=[dim]{config.ignore_tag}[/dim]")
+        meta_parts.append(f"ignore=[dim]'{config.ignore_tag}'[/dim]")
     if dry_run:
         meta_parts.append("[yellow]dry-run[/yellow]")
 
@@ -541,10 +541,10 @@ async def process_application(
             )
 
     except StarrAPIError as e:
-        console.print(f"[red]✗ API error: {e}[/red]")
+        console.print(f"[red]Error: API error: {e}[/red]")
         raise
     except Exception as e:
-        console.print(f"[red]✗ {e}[/red]")
+        console.print(f"[red]Error: {e}[/red]")
         raise
 
 
@@ -664,10 +664,10 @@ def main(
     try:
         config_dict = parse_ini_config(config_file)
     except FileNotFoundError as e:
-        console.print(f"[red]✗ config file not found: {config_file}[/red]")
+        console.print(f"[red]Error: config file not found: {config_file}[/red]")
         raise click.Abort from e
     except Exception as e:
-        console.print(f"[red]✗ failed to parse config: {e}[/red]")
+        console.print(f"[red]Error: failed to parse config: {e}[/red]")
         raise click.Abort from e
 
     notifications = None
@@ -675,12 +675,12 @@ def main(
         try:
             notifications = NotificationConfig(**config_dict["Notifications"])
         except (ValidationError, ValueError) as e:
-            console.print(f"[red]✗ invalid notification config: {e}[/red]")
+            console.print(f"[red]Error: invalid notification config: {e}[/red]")
             raise click.Abort from e
         except Exception as e:
             # Catch-all for unexpected errors during notification config parsing
             logger.exception("Unexpected error parsing notification config")
-            console.print(f"[red]✗ notification config error: {e}[/red]")
+            console.print(f"[red]Error: notification config error: {e}[/red]")
             raise click.Abort from e
 
     async def run_all() -> None:
@@ -694,7 +694,7 @@ def main(
             try:
                 validate_application_name(app_lower)
             except ValueError as e:
-                console.print(f"[red]✗ {e}[/red]")
+                console.print(f"[red]Error: {e}[/red]")
                 raise click.Abort from e
 
             app_config_key = None
@@ -704,7 +704,7 @@ def main(
                     break
 
             if not app_config_key:
-                console.print(f"[red]✗ no config section for '{app}'[/red]")
+                console.print(f"[red]Error: no config section for '{app}'[/red]")
                 raise click.Abort
 
             try:
@@ -716,14 +716,14 @@ def main(
                 )
             except (StarrAPIError, ValidationError, ValueError) as e:
                 # Expected errors: API issues, validation errors
-                console.print(f"[red]✗ {app}: {e}[/red]")
+                console.print(f"[red]Error: {app}: {e}[/red]")
                 if verbose:
                     console.print_exception()
                 raise click.Abort from e
             except Exception as e:
                 # Catch-all for unexpected errors - log for debugging
                 logger.exception("Unexpected error processing %s", app)
-                console.print(f"[red]✗ {app}: unexpected error - {e}[/red]")
+                console.print(f"[red]Error: {app}: unexpected error - {e}[/red]")
                 if verbose:
                     console.print_exception()
                 raise click.Abort from e
