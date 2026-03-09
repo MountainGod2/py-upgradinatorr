@@ -41,7 +41,6 @@ MAX_DISCORD_DESCRIPTION_LENGTH = 4096
 DRY_RUN_TAG_ID = -1
 DRY_RUN_IGNORE_TAG_ID = -2
 
-# Map application names to their status configuration field names
 STATUS_FIELDS = {
     "radarr": "movie_status",
     "sonarr": "series_status",
@@ -465,17 +464,14 @@ async def process_application(
             if verbose:
                 console.print(f"[dim]API version: {client.api_version}[/dim]")
 
-            # Set up tags
             tag_id, ignore_tag_id = await _setup_tags(
                 client, config, app_style, dry_run=dry_run, verbose=verbose
             )
 
-            # Set up quality profile
             quality_profile_id = await _setup_quality_profile(
                 client, config, app_style, verbose=verbose
             )
 
-            # Fetch and filter media
             filtered = await _fetch_and_filter_media(
                 client,
                 app_name,
@@ -487,10 +483,8 @@ async def process_application(
                 verbose=verbose,
             )
 
-            # Handle empty results
             if not filtered:
                 if config.unattended:
-                    # Try cycling tags in unattended mode
                     all_media = await client.get_all_media()
                     filtered = await _handle_unattended_mode(
                         client,
@@ -517,7 +511,6 @@ async def process_application(
                         )
                     return
 
-            # Select random items from filtered results
             selected = select_random_media(filtered, config.count)
 
             console.print(
@@ -529,7 +522,6 @@ async def process_application(
                 table = create_media_table(selected, app_name)
                 console.print(table)
 
-            # Execute search and tagging
             await _execute_search_and_tag(
                 client,
                 app_name,
@@ -678,7 +670,6 @@ def main(
             console.print(f"[red]Error: invalid notification config: {e}[/red]")
             raise click.Abort from e
         except Exception as e:
-            # Catch-all for unexpected errors during notification config parsing
             logger.exception("Unexpected error parsing notification config")
             console.print(f"[red]Error: notification config error: {e}[/red]")
             raise click.Abort from e
@@ -715,13 +706,11 @@ def main(
                     app_name, app_config, notifications, dry_run=dry_run, verbose=verbose
                 )
             except (StarrAPIError, ValidationError, ValueError) as e:
-                # Expected errors: API issues, validation errors
                 console.print(f"[red]Error: {app}: {e}[/red]")
                 if verbose:
                     console.print_exception()
                 raise click.Abort from e
             except Exception as e:
-                # Catch-all for unexpected errors - log for debugging
                 logger.exception("Unexpected error processing %s", app)
                 console.print(f"[red]Error: {app}: unexpected error - {e}[/red]")
                 if verbose:

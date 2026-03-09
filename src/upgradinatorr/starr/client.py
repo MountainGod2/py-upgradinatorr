@@ -20,11 +20,11 @@ from upgradinatorr.config import get_application_type
 logger = logging.getLogger(__name__)
 
 RETRYABLE_STATUS_CODES = {
-    HTTPStatus.TOO_MANY_REQUESTS,
-    HTTPStatus.INTERNAL_SERVER_ERROR,
-    HTTPStatus.BAD_GATEWAY,
-    HTTPStatus.SERVICE_UNAVAILABLE,
-    HTTPStatus.GATEWAY_TIMEOUT,
+    HTTPStatus.TOO_MANY_REQUESTS,  # 429: Rate limited
+    HTTPStatus.INTERNAL_SERVER_ERROR,  # 500: Temporary server issues
+    HTTPStatus.BAD_GATEWAY,  # 502: Upstream proxy errors
+    HTTPStatus.SERVICE_UNAVAILABLE,  # 503: Service restarting etc
+    HTTPStatus.GATEWAY_TIMEOUT,  # 504: Upstream timeout
 }
 
 

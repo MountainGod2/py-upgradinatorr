@@ -111,7 +111,6 @@ class ApplicationConfig(BaseModel):
     ignore_tag: str | None = Field(None, alias="IgnoreTag")
     quality_profile_name: str | None = Field(None, alias="QualityProfileName")
 
-    # Application-specific status fields
     movie_status: str | None = Field(None, alias="MovieStatus")
     series_status: str | None = Field(None, alias="SeriesStatus")
     artist_status: str | None = Field(None, alias="ArtistStatus")
