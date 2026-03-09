@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends gosu \
+ && apt-get install -y --no-install-recommends gosu curl ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && gosu nobody true
 
@@ -16,6 +16,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-install-project --no-dev
 
 COPY . /app
+
+ARG EXAMPLE_CONFIG_URL="https://raw.githubusercontent.com/angrycuban13/Just-A-Bunch-Of-Starr-Scripts/refs/heads/main/Upgradinatorr/upgradinatorr-example.conf"
+ARG EXAMPLE_CONFIG_CHECKSUM="690030280b5fb21b16f991a14dd8b6e257ea72e907ee4e11b0973e85a77d2b4c"
+RUN curl -sL "${EXAMPLE_CONFIG_URL}" -o /app/upgradinatorr-example.conf \
+ && echo "${EXAMPLE_CONFIG_CHECKSUM}  /app/upgradinatorr-example.conf" | sha256sum -c -
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev

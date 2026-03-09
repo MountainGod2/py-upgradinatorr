@@ -5,7 +5,7 @@ Automated media upgrade search for Starr applications (Radarr, Sonarr, Lidarr, R
 ## Installation
 
 ```bash
-pip install upgradinatorr
+uv tool install upgradinatorr
 ```
 
 Or install from source:
@@ -13,7 +13,8 @@ Or install from source:
 ```bash
 git clone https://github.com/yourusername/upgradinatorr
 cd upgradinatorr
-pip install -e .
+uv sync
+source .venv/bin/activate  # or prefix the commands below with `uv run`
 ```
 
 ## Usage
@@ -46,8 +47,8 @@ Run with docker:
 docker run --rm \
   -e PUID=99 \
   -e PGID=100 \
-  -v /path/to/config:/config \
-  mountaingod2/upgradinatorr:develop \
+  -v /mnt/user/appdata/upgradinatorr/config:/config \
+  mountaingod2/upgradinatorr:latest \
   -a radarr,sonarr --verbose
 ```
 
@@ -58,7 +59,7 @@ version: '3.8'
 
 services:
   upgradinatorr:
-    image: mountaingod2/upgradinatorr:develop
+    image: mountaingod2/upgradinatorr:latest
     container_name: upgradinatorr
     environment:
       - PUID=99  # Set to your user ID (run `id -u`)

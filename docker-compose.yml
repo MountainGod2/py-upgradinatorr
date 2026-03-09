@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   upgradinatorr:
-    image: mountaingod2/upgradinatorr:develop
+    image: mountaingod2/upgradinatorr:latest
     container_name: upgradinatorr
     environment:
       - PUID=1000
