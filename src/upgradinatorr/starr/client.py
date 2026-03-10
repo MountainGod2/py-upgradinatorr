@@ -8,8 +8,8 @@ from typing import Any, ClassVar, Self, cast
 
 import aiohttp
 from tenacity import (
+    AsyncRetrying,
     before_sleep_log,
-    retry,
     retry_if_exception,
     stop_after_attempt,
     wait_exponential,
@@ -30,7 +30,16 @@ RETRYABLE_STATUS_CODES = {
 
 def _is_retryable_exception(exception: BaseException) -> bool:
     """Return True when an exception should be retried."""
-    if isinstance(exception, (aiohttp.ClientError, TimeoutError, asyncio.TimeoutError)):
+    if isinstance(
+        exception,
+        (
+            aiohttp.ClientConnectionError,
+            aiohttp.ClientConnectorError,
+            aiohttp.ServerTimeoutError,
+            TimeoutError,
+            asyncio.TimeoutError,
+        ),
+    ):
         return True
     if isinstance(exception, StarrAPIError):
         return exception.status in RETRYABLE_STATUS_CODES
@@ -115,13 +124,6 @@ class StarrClient:
         if self._session:
             await self._session.close()
 
-    @retry(
-        retry=retry_if_exception(_is_retryable_exception),
-        wait=wait_exponential(multiplier=0.5, min=1, max=8),
-        stop=stop_after_attempt(4),
-        reraise=True,
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-    )
     async def _request(
         self,
         method: str,
@@ -142,6 +144,35 @@ class StarrClient:
             StarrAPIError: If API returns an error status
 
         """
+        method_upper = method.upper()
+
+        should_retry = method_upper in {"GET", "HEAD", "OPTIONS", "PUT", "DELETE"}
+        if method_upper == "POST":
+            should_retry = False
+
+        if not should_retry:
+            return await self._request_once(method_upper, endpoint, **kwargs)
+
+        async for attempt in AsyncRetrying(
+            retry=retry_if_exception(_is_retryable_exception),
+            wait=wait_exponential(multiplier=0.5, min=1, max=8),
+            stop=stop_after_attempt(4),
+            reraise=True,
+            before_sleep=before_sleep_log(logger, logging.WARNING),
+        ):
+            with attempt:
+                return await self._request_once(method_upper, endpoint, **kwargs)
+
+        msg = "request retry loop exited unexpectedly"
+        raise RuntimeError(msg)
+
+    async def _request_once(
+        self,
+        method: str,
+        endpoint: str,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> dict[str, Any] | list[dict[str, Any]]:
+        """Make a single HTTP request attempt to Starr API."""
         if not self._session:
             msg = "Client not initialized. Use async with statement."
             raise RuntimeError(msg)
@@ -158,25 +189,33 @@ class StarrClient:
 
             return cast("dict[str, Any] | list[dict[str, Any]]", await response.json())
 
-    @retry(
-        retry=retry_if_exception(_is_retryable_exception),
-        wait=wait_exponential(multiplier=0.5, min=1, max=8),
-        stop=stop_after_attempt(4),
-        reraise=True,
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-    )
     async def _get_api_version(self) -> str:
         """Get current API version from application."""
-        if not self._session:
-            msg = "Client not initialized"
-            raise RuntimeError(msg)
+        async for attempt in AsyncRetrying(
+            retry=retry_if_exception(_is_retryable_exception),
+            wait=wait_exponential(multiplier=0.5, min=1, max=8),
+            stop=stop_after_attempt(4),
+            reraise=True,
+            before_sleep=before_sleep_log(logger, logging.WARNING),
+        ):
+            with attempt:
+                if not self._session:
+                    msg = "Client not initialized"
+                    raise RuntimeError(msg)
 
-        url = f"{self.base_url}/api"
-        async with self._session.get(url) as response:
-            if not (HTTPStatus.OK <= response.status < HTTPStatus.MULTIPLE_CHOICES):
-                raise StarrAPIError(response.status, "failed to get API version", self.app_name)
-            data = await response.json()
-            return cast("str", data["current"])
+                url = f"{self.base_url}/api"
+                async with self._session.get(url) as response:
+                    if not (HTTPStatus.OK <= response.status < HTTPStatus.MULTIPLE_CHOICES):
+                        raise StarrAPIError(
+                            response.status,
+                            "failed to get API version",
+                            self.app_name,
+                        )
+                    data = await response.json()
+                    return cast("str", data["current"])
+
+        msg = "api version retry loop exited unexpectedly"
+        raise RuntimeError(msg)
 
     async def get_all_media(self) -> list[dict[str, Any]]:
         """Get all media items from the application."""
