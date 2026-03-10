@@ -114,6 +114,7 @@ Url=http://localhost:8989
 
 - Python 3.12+
 - aiohttp
+- tenacity
 - rich
 - rich-click
 - pydantic
