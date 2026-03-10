@@ -1,6 +1,7 @@
 """Configuration management for Upgradinatorr."""
 
 import re
+from configparser import ConfigParser
 from pathlib import Path
 from typing import Self
 
@@ -165,21 +166,12 @@ class ApplicationConfig(BaseModel):
             raise ValueError(msg)
         return v
 
-    @field_validator("artist_status")
+    @field_validator("artist_status", "author_status")
     @classmethod
-    def validate_artist_status(cls, v: str | None) -> str | None:
-        """Validate that the artist status is one of the allowed values."""
+    def validate_ended_status(cls, v: str | None) -> str | None:
+        """Validate that the artist or author status is one of the allowed values."""
         if v and v not in ["continuing", "ended"]:
-            msg = "ArtistStatus must be one of: continuing, ended"
-            raise ValueError(msg)
-        return v
-
-    @field_validator("author_status")
-    @classmethod
-    def validate_author_status(cls, v: str | None) -> str | None:
-        """Validate that the author status is one of the allowed values."""
-        if v and v not in ["continuing", "ended"]:
-            msg = "AuthorStatus must be one of: continuing, ended"
+            msg = "Status must be one of: continuing, ended"
             raise ValueError(msg)
         return v
 
@@ -217,40 +209,23 @@ def parse_ini_config(config_path: Path) -> dict[str, dict[str, str]]:
     Also merges General section webhooks into Notifications section for backward compatibility.
     When both are defined, General section values take precedence.
     """
-    config: dict[str, dict[str, str]] = {}
-    current_section = None
+    config = ConfigParser()
+    config.optionxform = str
+    config.read(config_path)
 
-    with config_path.open() as f:
-        for raw_line in f:
-            line = raw_line.strip()
-
-            if not line or line.startswith(";"):
-                continue
-
-            if line.startswith("[") and line.endswith("]"):
-                current_section = line[1:-1]
-                config[current_section] = {}
-                continue
-
-            if "=" in line and current_section:
-                key, value = line.split("=", 1)
-                key = key.strip()
-                value = value.strip()
-
-                if not key.startswith(";"):
-                    config[current_section][key] = value
+    config_dict = {s: dict(config.items(s)) for s in config.sections()}
 
     # General section takes precedence if both are defined
-    if "General" in config:
-        if "Notifications" not in config:
-            config["Notifications"] = {}
+    if "General" in config_dict:
+        if "Notifications" not in config_dict:
+            config_dict["Notifications"] = {}
 
         for key in [
             "DiscordWebhook",
             "NotifiarrPassthroughWebhook",
             "NotifiarrPassthroughDiscordChannelId",
         ]:
-            if key in config["General"]:
-                config["Notifications"][key] = config["General"][key]
+            if key in config_dict["General"]:
+                config_dict["Notifications"][key] = config_dict["General"][key]
 
-    return config
+    return config_dict
