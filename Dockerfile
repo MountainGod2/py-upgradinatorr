@@ -1,9 +1,11 @@
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends gosu curl ca-certificates \
- && rm -rf /var/lib/apt/lists/* \
- && gosu nobody true
+ && apt-get install -y --no-install-recommends gosu ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --system --gid 999 upgradinatorr \
+ && useradd --system --gid 999 --uid 999 --create-home upgradinatorr
 
 WORKDIR /app
 
@@ -17,11 +19,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY . /app
 
-ARG EXAMPLE_CONFIG_URL="https://raw.githubusercontent.com/angrycuban13/Just-A-Bunch-Of-Starr-Scripts/refs/heads/main/Upgradinatorr/upgradinatorr-example.conf"
-ARG EXAMPLE_CONFIG_CHECKSUM="690030280b5fb21b16f991a14dd8b6e257ea72e907ee4e11b0973e85a77d2b4c"
-RUN curl -sL "${EXAMPLE_CONFIG_URL}" -o /app/upgradinatorr-example.conf \
- && echo "${EXAMPLE_CONFIG_CHECKSUM}  /app/upgradinatorr-example.conf" | sha256sum -c -
-
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
@@ -29,10 +26,10 @@ ENV PATH="/app/.venv/bin:$PATH"
 ENV PUID=999
 ENV PGID=999
 
-ENV UV_CACHE_DIR=/config/.cache/uv
-ENV XDG_CACHE_HOME=/config/.cache
+ENV XDG_CACHE_HOME=/tmp/.cache
 
-RUN mkdir -p /config
+RUN mkdir -p /config \
+ && chown 999:999 /config
 VOLUME /config
 WORKDIR /config
 

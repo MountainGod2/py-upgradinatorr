@@ -10,22 +10,17 @@ SEED_CONFIG="${SEED_CONFIG:-1}"
 CONFIG_PATH="${CONFIG_PATH:-/config/upgradinatorr.conf}"
 EXAMPLE_CONFIG_PATH="${EXAMPLE_CONFIG_PATH:-/app/upgradinatorr-example.conf}"
 
-APP_COMMAND="${APP_COMMAND:-uv run upgradinatorr}"
+APP_COMMAND="${APP_COMMAND:-upgradinatorr}"
 
-UV_CACHE_DIR="${UV_CACHE_DIR:-/config/.cache/uv}"
-XDG_CACHE_HOME="${XDG_CACHE_HOME:-/config/.cache}"
+XDG_CACHE_HOME="${XDG_CACHE_HOME:-/tmp/.cache}"
 
-export UV_CACHE_DIR
 export XDG_CACHE_HOME
 
 mkdir -p /config
-
-mkdir -p "${UV_CACHE_DIR}"
 mkdir -p "${XDG_CACHE_HOME}"
 
 chown "${PUID}:${PGID}" /config 2>/dev/null || true
-chown "${PUID}:${PGID}" "${XDG_CACHE_HOME}" 2>/dev/null || true
-chown "${PUID}:${PGID}" "${UV_CACHE_DIR}" 2>/dev/null || true
+chown -R "${PUID}:${PGID}" "${XDG_CACHE_HOME}" 2>/dev/null || true
 
 if [ "${CHOWN_CONFIG_RECURSIVE}" = "1" ]; then
   echo "CHOWN_CONFIG_RECURSIVE=1: chowning /config recursively to ${PUID}:${PGID}"
@@ -45,4 +40,4 @@ if [ "${SEED_CONFIG}" = "1" ]; then
   fi
 fi
 
-exec gosu "${PUID}:${PGID}" sh -c "${APP_COMMAND} \"\$@\"" sh "$@"
+exec gosu "${PUID}:${PGID}" ${APP_COMMAND} "$@"
