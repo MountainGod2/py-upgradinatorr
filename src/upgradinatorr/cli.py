@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, cast
 
 import rich_click as click
 from pydantic import ValidationError
@@ -17,6 +17,13 @@ from upgradinatorr.config import (
     get_application_type,
     parse_ini_config,
     validate_application_name,
+)
+from upgradinatorr.constants import (
+    APP_COLORS,
+    DRY_RUN_IGNORE_TAG_ID,
+    DRY_RUN_TAG_ID,
+    MAX_DISCORD_DESCRIPTION_LENGTH,
+    STATUS_FIELDS,
 )
 from upgradinatorr.notifications.discord import DiscordNotificationError, send_discord_notification
 from upgradinatorr.notifications.notifiarr import (
@@ -34,51 +41,6 @@ click.rich_click.SHOW_ARGUMENTS = True
 click.rich_click.GROUP_ARGUMENTS_OPTIONS = True
 click.rich_click.STYLE_ERRORS_SUGGESTION = "magenta italic"
 click.rich_click.STYLE_OPTIONS_TABLE_BOX = "SIMPLE"
-
-MAX_DISCORD_DESCRIPTION_LENGTH = 4096
-
-# Tag IDs for dry-run mode to avoid conflicts with real tags
-DRY_RUN_TAG_ID = -1
-DRY_RUN_IGNORE_TAG_ID = -2
-
-STATUS_FIELDS = {
-    "radarr": "movie_status",
-    "sonarr": "series_status",
-    "lidarr": "artist_status",
-    "readarr": "author_status",
-}
-
-
-class AppColor(TypedDict):
-    """Color configuration for an application."""
-
-    hex: str
-    decimal: int
-    thumbnail: str
-
-
-APP_COLORS: dict[str, AppColor] = {
-    "radarr": {
-        "hex": "FFC230",
-        "decimal": 16761392,
-        "thumbnail": "https://gh.notifiarr.com/images/icons/radarr.png",
-    },
-    "sonarr": {
-        "hex": "00CCFF",
-        "decimal": 52479,
-        "thumbnail": "https://gh.notifiarr.com/images/icons/sonarr.png",
-    },
-    "lidarr": {
-        "hex": "009252",
-        "decimal": 37458,
-        "thumbnail": "https://gh.notifiarr.com/images/icons/lidarr.png",
-    },
-    "readarr": {
-        "hex": "8E2222",
-        "decimal": 9314850,
-        "thumbnail": "https://gh.notifiarr.com/images/icons/readarr.png",
-    },
-}
 
 
 def get_app_style(app_name: str) -> str:
