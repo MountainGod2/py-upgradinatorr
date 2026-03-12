@@ -1,16 +1,11 @@
-# Python-generated files
 __pycache__/
 *.py[oc]
 build/
 dist/
 wheels/
 *.egg-info
-
-# Virtual environments
 .venv
-
-# Cache files
 *_cache/
-
-# Config files
 upgradinatorr.conf
+.vscode/settings.json
+.coverage
