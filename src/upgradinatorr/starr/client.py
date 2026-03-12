@@ -205,7 +205,7 @@ class StarrClient:
 
                 url = f"{self.base_url}/api"
                 async with self._session.get(url) as response:
-                    if not (HTTPStatus.OK <= response.status < HTTPStatus.MULTIPLE_CHOICES):
+                    if not HTTPStatus.OK <= response.status < HTTPStatus.MULTIPLE_CHOICES:
                         raise StarrAPIError(
                             response.status,
                             "failed to get API version",

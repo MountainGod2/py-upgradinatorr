@@ -205,6 +205,7 @@ def validate_application_name(app_name: str) -> None:
 
 class CaseSensitiveConfigParser(ConfigParser):
     """Config parser that preserves case of keys."""
+
     def optionxform(self, optionstr: str) -> str:
         """Override optionxform to preserve case sensitivity of keys."""
         return optionstr
