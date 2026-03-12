@@ -203,14 +203,20 @@ def validate_application_name(app_name: str) -> None:
     get_application_type(app_name)
 
 
+class CaseSensitiveConfigParser(ConfigParser):
+    """Config parser that preserves case of keys."""
+    def optionxform(self, optionstr: str) -> str:
+        """Override optionxform to preserve case sensitivity of keys."""
+        return optionstr
+
+
 def parse_ini_config(config_path: Path) -> dict[str, dict[str, str]]:
     """Parse INI configuration file into nested dictionary.
 
     Also merges General section webhooks into Notifications section for backward compatibility.
     When both are defined, General section values take precedence.
     """
-    config = ConfigParser()
-    config.optionxform = str
+    config = CaseSensitiveConfigParser()
     config.read(config_path)
 
     config_dict = {s: dict(config.items(s)) for s in config.sections()}
