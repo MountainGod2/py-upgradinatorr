@@ -1,11 +1,9 @@
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+# Stage 1: Builder
+FROM dhi.io/python:3.14-debian12-dev AS builder
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends gosu ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd --system --gid 999 upgradinatorr \
- && useradd --system --gid 999 --uid 999 --create-home upgradinatorr
+COPY --from=ghcr.io/astral-sh/uv:0.10.9 /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -22,21 +20,23 @@ COPY . /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
+# Stage 2: Runtime
+FROM dhi.io/python:3.14-debian12
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+WORKDIR /app
+
+COPY --from=builder /app /app
+
 ENV PATH="/app/.venv/bin:$PATH"
-ENV PUID=999
-ENV PGID=999
 
-ENV XDG_CACHE_HOME=/tmp/.cache
-
-RUN mkdir -p /config \
- && chown 999:999 /config
 VOLUME /config
 WORKDIR /config
 
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod 0755 /entrypoint.sh
+COPY --chmod=0755 entrypoint.py /entrypoint.py
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["python", "/entrypoint.py"]
 CMD ["--help"]
 
 LABEL org.opencontainers.image.source="https://github.com/MountainGod2/upgradinatorr"
