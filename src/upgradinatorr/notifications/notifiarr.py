@@ -75,7 +75,7 @@ async def send_notifiarr_notification(
             headers={"Accept": "text/plain"},
         ) as response,
     ):
-        if not (HTTPStatus.OK <= response.status < HTTPStatus.MULTIPLE_CHOICES):
+        if not HTTPStatus.OK <= response.status < HTTPStatus.MULTIPLE_CHOICES:
             msg = f"Notifiarr webhook returned {response.status}"
             raise NotifiarrNotificationError(
                 msg,
