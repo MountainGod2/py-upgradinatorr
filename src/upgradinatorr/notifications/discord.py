@@ -53,7 +53,7 @@ async def send_discord_notification(
         aiohttp.ClientSession() as session,
         session.post(webhook_url, json=payload) as response,
     ):
-        if not (HTTPStatus.OK <= response.status < HTTPStatus.MULTIPLE_CHOICES):
+        if not HTTPStatus.OK <= response.status < HTTPStatus.MULTIPLE_CHOICES:
             msg = f"Discord webhook returned {response.status}"
             raise DiscordNotificationError(
                 msg,
