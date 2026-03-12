@@ -55,17 +55,17 @@ docker run --rm \
 Or use docker-compose:
 
 ```yaml
-version: '3.8'
+name: upgradinatorr
 
 services:
   upgradinatorr:
     image: mountaingod2/upgradinatorr:latest
     container_name: upgradinatorr
-    environment:
-      - PUID=99  # Set to your user ID (run `id -u`)
-      - PGID=100  # Set to your group ID (run `id -g`)
     volumes:
       - /path/to/config:/config
+    environment:
+      - PUID=99
+      - PGID=100
     command: ["-a", "radarr,sonarr", "--verbose"]
 ```
 
