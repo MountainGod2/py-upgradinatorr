@@ -70,6 +70,10 @@ services:
 ```
 
 **Environment Variables:**
+
+> [!TIP]
+> Run `id` to display values for the current user.
+
 - `PUID` - User ID to run as (default: 999)
 - `PGID` - Group ID to run as (default: 999)
 
