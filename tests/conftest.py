@@ -1,29 +1,19 @@
 """Shared pytest configuration for test discovery."""
 
 import sys
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Protocol, Self
+from typing import Protocol
 
 import pytest
+import stamina
+from aioresponses import aioresponses
 
 # Ensure local src/ package imports work without installing the project.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
-
-
-class PatchClientSession(Protocol):
-    """Callable signature for patching aiohttp ClientSession in tests."""
-
-    def __call__(
-        self,
-        module_client_session_path: str,
-        *,
-        status: int,
-        payload: dict[str, object] | None = None,
-    ) -> None:
-        """Patch a module's aiohttp ClientSession factory with a fake implementation."""
 
 
 class WriteIni(Protocol):
@@ -34,51 +24,18 @@ class WriteIni(Protocol):
 
 
 @pytest.fixture
-def patch_client_session(monkeypatch: pytest.MonkeyPatch) -> PatchClientSession:
-    """Patch an aiohttp ClientSession with a configurable fake response."""
+def mock_aioresponses() -> Iterator[aioresponses]:
+    """Mock aiohttp requests."""
+    with aioresponses() as m:
+        yield m
 
-    class _FakeResponse:
-        def __init__(self, status: int, payload: dict[str, object] | None = None) -> None:
-            self.status = status
-            self._payload = payload
 
-        async def __aenter__(self) -> Self:
-            return self
-
-        async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
-            return None
-
-        async def json(self) -> dict[str, object]:
-            if self._payload is None:
-                return {}
-            return self._payload
-
-    class _FakeSession:
-        def __init__(self, status: int, payload: dict[str, object] | None = None) -> None:
-            self._status = status
-            self._payload = payload
-
-        async def __aenter__(self) -> Self:
-            return self
-
-        async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
-            return None
-
-        def post(self, *_args: object, **_kwargs: object) -> _FakeResponse:
-            return _FakeResponse(self._status, self._payload)
-
-    def _patch(
-        module_client_session_path: str,
-        *,
-        status: int,
-        payload: dict[str, object] | None = None,
-    ) -> None:
-        monkeypatch.setattr(
-            module_client_session_path,
-            lambda: _FakeSession(status, payload),
-        )
-
-    return _patch
+@pytest.fixture(autouse=True, scope="session")
+def setup_stamina_testing() -> Iterator[None]:
+    """Configure stamina to act immediately and avoid backoffs in tests."""
+    stamina.set_testing(True)
+    yield
+    stamina.set_testing(False)
 
 
 @pytest.fixture
