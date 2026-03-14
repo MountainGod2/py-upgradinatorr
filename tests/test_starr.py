@@ -48,10 +48,10 @@ def test_select_random_media_max_returns_all() -> None:
 @pytest.mark.parametrize(
     ("item", "app_name", "expected_title"),
     [
-        ({"title": "Alien"}, "radarr", "Alien"),
-        ({"title": "The Expanse"}, "sonarr", "The Expanse"),
-        ({"artistName": "Boards of Canada"}, "lidarr", "Boards of Canada"),
-        ({"authorName": "Ursula K. Le Guin"}, "readarr", "Ursula K. Le Guin"),
+        ({"title": "2001: A Space Odyssey"}, "radarr", "2001: A Space Odyssey"),
+        ({"title": "The Wire"}, "sonarr", "The Wire"),
+        ({"artistName": "Pink Floyd"}, "lidarr", "Pink Floyd"),
+        ({"authorName": "Stephen King"}, "readarr", "Stephen King"),
     ],
 )
 def test_get_media_title_uses_application_specific_field(
