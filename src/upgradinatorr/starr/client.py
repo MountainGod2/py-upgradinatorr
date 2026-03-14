@@ -7,13 +7,7 @@ from types import TracebackType
 from typing import Any, ClassVar, Self, cast
 
 import aiohttp
-from tenacity import (
-    AsyncRetrying,
-    before_sleep_log,
-    retry_if_exception,
-    stop_after_attempt,
-    wait_exponential,
-)
+import stamina
 
 from upgradinatorr.config import get_application_type
 
@@ -153,12 +147,11 @@ class StarrClient:
         if not should_retry:
             return await self._request_once(method_upper, endpoint, **kwargs)
 
-        async for attempt in AsyncRetrying(
-            retry=retry_if_exception(_is_retryable_exception),
-            wait=wait_exponential(multiplier=0.5, min=1, max=8),
-            stop=stop_after_attempt(4),
-            reraise=True,
-            before_sleep=before_sleep_log(logger, logging.WARNING),
+        async for attempt in stamina.retry_context(
+            on=_is_retryable_exception,
+            attempts=4,
+            wait_initial=1.0,
+            wait_max=8.0,
         ):
             with attempt:
                 return await self._request_once(method_upper, endpoint, **kwargs)
@@ -191,12 +184,11 @@ class StarrClient:
 
     async def _get_api_version(self) -> str:
         """Get current API version from application."""
-        async for attempt in AsyncRetrying(
-            retry=retry_if_exception(_is_retryable_exception),
-            wait=wait_exponential(multiplier=0.5, min=1, max=8),
-            stop=stop_after_attempt(4),
-            reraise=True,
-            before_sleep=before_sleep_log(logger, logging.WARNING),
+        async for attempt in stamina.retry_context(
+            on=_is_retryable_exception,
+            attempts=4,
+            wait_initial=1.0,
+            wait_max=8.0,
         ):
             with attempt:
                 if not self._session:
