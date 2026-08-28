@@ -41,6 +41,8 @@ build_command = """
   uv lock --upgrade-package "$PACKAGE_NAME"
   uv build
 """
+allow_zero_version = true
+major_on_zero = false
 
 [tool.ruff]
 line-length = 100
