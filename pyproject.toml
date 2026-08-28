@@ -26,14 +26,14 @@ dev = [
     "pytest-cov==7.0.0",
     "ruff==0.15.2",
 ]
-build = ["python-semantic-release==10.5.3", "uv==0.9.26"]
+build = ["python-semantic-release==10.5.3", "uv==0.12.7", "gitpython<3.2"]
 
 [project.scripts]
 upgradinatorr = "upgradinatorr.cli:main"
 upgradinatorr-tui = "upgradinatorr.tui:run_tui"
 
 [build-system]
-requires = ["uv_build==0.9.26"]
+requires = ["uv_build==0.12.7"]
 build-backend = "uv_build"
 
 [tool.semantic_release]
