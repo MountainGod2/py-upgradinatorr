@@ -12,6 +12,8 @@ dependencies = [
     "rich==14.3.4",
     "rich-click==1.9.8",
     "stamina==25.2.0",
+    "textual==8.1.1",
+    "textual-dev==1.8.0",
 ]
 
 [dependency-groups]
@@ -28,6 +30,7 @@ build = ["python-semantic-release==10.5.3", "uv==0.9.26"]
 
 [project.scripts]
 upgradinatorr = "upgradinatorr.cli:main"
+upgradinatorr-tui = "upgradinatorr.tui:run_tui"
 
 [build-system]
 requires = ["uv_build==0.9.26"]

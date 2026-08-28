@@ -18,12 +18,18 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup | Force correct release branch on workflow sha
-        run: git checkout -B ${{ github.ref_name }}
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: git checkout -B "$REF_NAME"
 
       - name: Setup | Install uv
-        uses: asdf-vm/actions/install@1902764435ca0dd2f3388eea723a4f92a4eb8302  # v4.0.2
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          version: "0.12.7"
 
       - name: Setup | Install Python & Project dependencies
         run: uv sync --group build --no-dev
@@ -64,12 +70,15 @@ jobs:
   test-release-artifacts:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Setup | Checkout Repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Setup | Download Distribution Artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
@@ -80,7 +89,9 @@ jobs:
           path: ./dist
 
       - name: Setup | Install uv
-        uses: asdf-vm/actions/install@1902764435ca0dd2f3388eea723a4f92a4eb8302  # v4.0.2
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          version: "0.12.7"
 
       - name: Setup | Install Python & Project dependencies
         run: uv sync
@@ -88,7 +99,7 @@ jobs:
       - name: Setup | Install distribution artifact
         if: ${{ steps.artifact-download.outcome == 'success' }}
         run: |
-          uv pip uninstall upgradinatorr
+          uv pip uninstall upgradinatorr || true
           uv pip install dist/upgradinatorr-*.whl
 
       - name: Test | Run CLI command to verify installation
@@ -116,12 +127,17 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           ref: ${{ github.ref_name }}
+          fetch-depth: 0
 
       - name: Setup | Force release branch to be at workflow sha
-        run: git reset --hard ${{ github.sha }}
+        env:
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: git reset --hard "$WORKFLOW_SHA"
 
       - name: Setup | Install uv
-        uses: asdf-vm/actions/install@1902764435ca0dd2f3388eea723a4f92a4eb8302  # v4.0.2
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          version: "0.12.7"
 
       - name: Setup | Install Python & Project dependencies
         run: uv sync --group build --no-dev
