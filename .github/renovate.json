@@ -1,14 +1,23 @@
 {
-  "extends": ["config:best-practices"],
-  "automerge": true,
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices"
+  ],
   "automergeType": "pr",
   "packageRules": [
     {
-      "matchUpdateTypes": ["patch", "minor", "digest"],
+      "matchUpdateTypes": [
+        "patch",
+        "minor",
+        "digest"
+      ],
       "automerge": true
     }
   ],
   "pre-commit": {
+    "enabled": true
+  },
+  "lockFileMaintenance": {
     "enabled": true
   }
 }
