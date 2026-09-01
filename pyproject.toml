@@ -18,7 +18,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "aioresponses==0.7.9",
+    "aioresponses-ng==0.8.2",
     "mypy==1.20.2",
     "pre-commit==4.6.2",
     "pytest==9.1.1",
@@ -59,6 +59,7 @@ changelog.exclude_commit_patterns = [
     '''Initial [Cc]ommit.*''',
 ]
 changelog.mode = "init"
+version_toml = ["pyproject.toml:project.version"]
 
 [tool.ruff]
 line-length = 100
