@@ -3,7 +3,7 @@
 import contextlib
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from textual import on, work
 from textual.app import App, ComposeResult
@@ -23,18 +23,18 @@ from textual.widgets import (
 from upgradinatorr.config import (
     ApplicationConfig,
     NotificationConfig,
-    get_application_type,
     parse_ini_config,
     validate_application_name,
 )
-from upgradinatorr.constants import STATUS_FIELDS
+from upgradinatorr.core import NotificationSender, WorkflowReporter, run_application
+from upgradinatorr.media_display import build_media_display_row
+from upgradinatorr.notifications.completion import send_completion_notification
 from upgradinatorr.starr.client import StarrAPIError, StarrClient
-from upgradinatorr.starr.media import MediaFilter, select_random_media
 
 logger = logging.getLogger(__name__)
 
 
-class MediaDataTable(DataTable):
+class MediaDataTable(DataTable[str]):
     """Custom DataTable for displaying media items."""
 
     def on_mount(self) -> None:
@@ -49,42 +49,58 @@ class MediaDataTable(DataTable):
     def append_media(self, media_items: list[dict[str, Any]], app_name: str, app_type: str) -> None:
         """Append media items to the table without clearing it."""
         for item in media_items:
-            monitored = "✓" if item.get("monitored") else "✗"
-            status = str(item.get("status", "unknown")).title()
-
-            if app_type == "radarr":
-                self.add_row(
-                    app_name.title(),
-                    item.get("title", "Unknown"),
-                    str(item.get("year", "")),
-                    status,
-                    monitored,
-                    "",
-                )
-            elif app_type == "sonarr":
-                seasons = str(
-                    item.get("seasonCount", item.get("statistics", {}).get("seasonCount", "?"))
-                )
-                self.add_row(
-                    app_name.title(),
-                    item.get("title", "Unknown"),
-                    str(item.get("year", "")),
-                    status,
-                    monitored,
-                    f"S: {seasons}",
-                )
-            elif app_type == "lidarr":
-                self.add_row(
-                    app_name.title(), item.get("artistName", "Unknown"), "", status, monitored, ""
-                )
-            elif app_type == "readarr":
-                self.add_row(
-                    app_name.title(), item.get("authorName", "Unknown"), "", status, monitored, ""
-                )
+            row = build_media_display_row(item, app_type)
+            monitored = "✓" if row.monitored else "✗"
+            self.add_row(
+                app_name.title(),
+                row.title,
+                row.year,
+                row.status,
+                monitored,
+                row.extra,
+            )
 
 
-class UpgradinatorTUI(App):
+class TuiWorkflowReporter(WorkflowReporter):
+    """Render shared workflow events in Textual widgets."""
+
+    def __init__(self, app: "UpgradinatorTUI", app_name: str, *, verbose_enabled: bool) -> None:
+        """Store UI widget context and verbosity flags."""
+        self._app = app
+        self._app_name = app_name
+        self._verbose_enabled = verbose_enabled
+
+    def status(self, message: str) -> None:
+        """Render a status update in the status label."""
+        self._app.set_status(f"{self._app_name}: {message}")
+
+    def info(self, message: str) -> None:
+        """Render an informational message to the log widget."""
+        self._app.query_one("#log-display", Log).write_line(message)
+
+    def warning(self, message: str) -> None:
+        """Render a warning message to the log widget."""
+        self._app.query_one("#log-display", Log).write_line(f"Warning: {message}")
+
+    def success(self, message: str) -> None:
+        """Render a success message to the log widget."""
+        self._app.query_one("#log-display", Log).write_line(f"Success: {message}")
+
+    def verbose(self, message: str) -> None:
+        """Render verbose output when verbose mode is enabled."""
+        if self._verbose_enabled:
+            self._app.query_one("#log-display", Log).write_line(f"Detail: {message}")
+
+
+class UpgradinatorTUI(App[None]):
     """Textual TUI for Upgradinatorr."""
+
+    BINDINGS: ClassVar[list[Binding | tuple[str, str] | tuple[str, str, str]]] = [
+        Binding("q", "quit", "Quit", priority=True),
+        Binding("r", "refresh", "Refresh"),
+        Binding("s", "start", "Start"),
+        Binding("c", "clear_log", "Clear Log"),
+    ]
 
     CSS = """
     Screen {
@@ -164,16 +180,13 @@ class UpgradinatorTUI(App):
 
     def __init__(self, config_file: Path, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
         """Initialize the TUI application."""
-        self.BINDINGS = [
-            Binding("q", "quit", "Quit", priority=True),
-            Binding("r", "refresh", "Refresh"),
-            Binding("s", "start", "Start"),
-            Binding("c", "clear_log", "Clear Log"),
-        ]
         super().__init__(*args, **kwargs)
         self.config_file = config_file
         self.config_dict: dict[str, Any] = {}
         self.notifications: NotificationConfig | None = None
+        self.notify_discord_enabled = False
+        self.notify_notifiarr_enabled = False
+        self._suppress_notification_logs = False
         self.dry_run = False
         self.verbose = True
 
@@ -197,6 +210,8 @@ class UpgradinatorTUI(App):
 
                 yield Checkbox("Dry Run", id="dry-run-switch", value=False)
                 yield Checkbox("Verbose", id="verbose-switch", value=True)
+                yield Label("Notifications", classes="panel-title")
+                yield Vertical(id="notification-method-list")
 
                 yield Button("Start Process", variant="success", id="start-button")
                 yield Button("Refresh Config", id="refresh-button")
@@ -217,6 +232,88 @@ class UpgradinatorTUI(App):
         with contextlib.suppress(Exception):
             self.query_one("#status-display", Label).update(text)
 
+    def _get_notification_config_availability(self) -> tuple[bool, bool]:
+        """Return config availability for Discord and Notifiarr channels."""
+        notifications = self.notifications
+        if notifications is None:
+            return False, False
+
+        has_discord = bool(notifications.discord_webhook)
+        has_notifiarr = bool(
+            notifications.notifiarr_webhook and notifications.notifiarr_channel_id,
+        )
+        return has_discord, has_notifiarr
+
+    def _notification_summary(self) -> str:
+        """Build a short summary of active notification settings."""
+        has_discord, has_notifiarr = self._get_notification_config_availability()
+        if not has_discord and not has_notifiarr:
+            return "No notification methods configured"
+
+        if not self.notify_discord_enabled and not self.notify_notifiarr_enabled:
+            return "All notification methods disabled"
+
+        methods: list[str] = []
+        if has_discord:
+            discord_state = "on" if self.notify_discord_enabled else "off"
+            methods.append(f"Discord notifications {discord_state}")
+        if has_notifiarr:
+            notifiarr_state = "on" if self.notify_notifiarr_enabled else "off"
+            methods.append(f"Notifiarr notifications {notifiarr_state}")
+
+        return ", ".join(methods)
+
+    def _get_notification_switch(self, switch_id: str) -> Checkbox | None:
+        """Return a notification checkbox if it is currently mounted."""
+        for widget in self.query(f"#{switch_id}"):
+            if isinstance(widget, Checkbox):
+                return widget
+        return None
+
+    async def _rebuild_notification_method_switches(self) -> None:
+        """Mount only notification method switches that are configured."""
+        has_discord, has_notifiarr = self._get_notification_config_availability()
+        method_list = self.query_one("#notification-method-list", Vertical)
+
+        await method_list.query("*").remove()
+
+        if has_discord:
+            await method_list.mount(
+                Checkbox("Discord", id="notify-discord-switch", value=self.notify_discord_enabled),
+            )
+        if has_notifiarr:
+            await method_list.mount(
+                Checkbox(
+                    "Notifiarr",
+                    id="notify-notifiarr-switch",
+                    value=self.notify_notifiarr_enabled,
+                ),
+            )
+
+    def _apply_notification_switch_states(self) -> None:
+        """Sync notification checkbox values and disabled state from current settings."""
+        has_discord, has_notifiarr = self._get_notification_config_availability()
+
+        if not has_discord:
+            self.notify_discord_enabled = False
+        if not has_notifiarr:
+            self.notify_notifiarr_enabled = False
+
+        discord_switch = self._get_notification_switch("notify-discord-switch")
+        notifiarr_switch = self._get_notification_switch("notify-notifiarr-switch")
+
+        self._suppress_notification_logs = True
+        if discord_switch and discord_switch.value != self.notify_discord_enabled:
+            discord_switch.value = self.notify_discord_enabled
+        if notifiarr_switch and notifiarr_switch.value != self.notify_notifiarr_enabled:
+            notifiarr_switch.value = self.notify_notifiarr_enabled
+        self._suppress_notification_logs = False
+
+        if discord_switch:
+            discord_switch.disabled = not has_discord
+        if notifiarr_switch:
+            notifiarr_switch.disabled = not has_notifiarr
+
     async def load_config(self) -> None:
         """Load configuration from file."""
         log_widget = self.query_one("#log-display", Log)
@@ -228,6 +325,14 @@ class UpgradinatorTUI(App):
 
             if "Notifications" in self.config_dict:
                 self.notifications = NotificationConfig(**self.config_dict["Notifications"])
+            else:
+                self.notifications = None
+
+            has_discord, has_notifiarr = self._get_notification_config_availability()
+            self.notify_discord_enabled = has_discord
+            self.notify_notifiarr_enabled = has_notifiarr
+            await self._rebuild_notification_method_switches()
+            self._apply_notification_switch_states()
 
             app_list = self.query_one("#app-list", VerticalScroll)
 
@@ -247,16 +352,17 @@ class UpgradinatorTUI(App):
                     )
                     valid_apps += 1
                 except ValueError:
-                    log_widget.write_line(f"Skipping invalid app: {app_name}")
+                    log_widget.write_line(f"Warning: skipping invalid app '{app_name}'")
 
             log_widget.write_line(f"Config loaded: {valid_apps} apps found.")
+            log_widget.write_line(self._notification_summary())
             self.set_status(f"Ready ({valid_apps} available apps)")
 
         except FileNotFoundError:
-            log_widget.write_line(f"Config file not found: {self.config_file}")
+            log_widget.write_line(f"Error: config file not found at {self.config_file}")
             self.set_status("Error: Config not found")
         except Exception as e:
-            log_widget.write_line(f"Error loading config: {e}")
+            log_widget.write_line(f"Error: failed to load config: {e}")
             self.set_status("Error: Failed to load config")
             logger.exception("Error loading config")
 
@@ -271,7 +377,7 @@ class UpgradinatorTUI(App):
         ]
 
         if not selected_apps:
-            self.query_one("#log-display", Log).write_line("No applications selected.")
+            self.query_one("#log-display", Log).write_line("Warning: no applications selected")
             self.set_status("No applications selected")
             return
 
@@ -304,6 +410,20 @@ class UpgradinatorTUI(App):
             f"Verbose mode {'enabled' if self.verbose else 'disabled'}"
         )
 
+    @on(Checkbox.Changed, "#notify-discord-switch")
+    def on_notify_discord_switched(self, event: Checkbox.Changed) -> None:
+        """Handle Discord notification switch toggle."""
+        self.notify_discord_enabled = event.value
+        if not self._suppress_notification_logs:
+            self.query_one("#log-display", Log).write_line(self._notification_summary())
+
+    @on(Checkbox.Changed, "#notify-notifiarr-switch")
+    def on_notify_notifiarr_switched(self, event: Checkbox.Changed) -> None:
+        """Handle Notifiarr notification switch toggle."""
+        self.notify_notifiarr_enabled = event.value
+        if not self._suppress_notification_logs:
+            self.query_one("#log-display", Log).write_line(self._notification_summary())
+
     async def process_app(self, app_name: str) -> None:
         """Process a single application."""
         log_widget = self.query_one("#log-display", Log)
@@ -324,7 +444,6 @@ class UpgradinatorTUI(App):
                 return
 
             app_config = ApplicationConfig(**self.config_dict[app_config_key])
-            app_type = get_application_type(app_lower)
 
             count_input = self.query_one("#global-count", Input).value
             custom_count = app_config.count
@@ -332,82 +451,75 @@ class UpgradinatorTUI(App):
                 custom_count = int(count_input)
 
             if self.verbose:
-                log_widget.write_line(f"  URL: {app_config.url}")
-                log_widget.write_line(f"  Tag: {app_config.tag_name} | Items: {custom_count}")
+                log_widget.write_line(f"Detail: URL {app_config.url}")
+                log_widget.write_line(
+                    f"Detail: tag '{app_config.tag_name}' | items {custom_count}",
+                )
+
+            notification_sender: NotificationSender | None = None
+            notifications = self.notifications
+            if notifications is not None:
+                send_discord = self.notify_discord_enabled and bool(notifications.discord_webhook)
+                send_notifiarr = self.notify_notifiarr_enabled and bool(
+                    notifications.notifiarr_webhook and notifications.notifiarr_channel_id,
+                )
+
+                def log_notification_warning(message: str) -> None:
+                    """Write notification warnings to the TUI log."""
+                    log_widget.write_line(f"Warning: {message}")
+
+                if send_discord or send_notifiarr:
+
+                    async def configured_notification_sender(
+                        notif_app_name: str,
+                        media_items: list[dict[str, Any]],
+                        custom_message: str | None = None,
+                    ) -> None:
+                        await send_completion_notification(
+                            notif_app_name,
+                            media_items,
+                            notifications,
+                            custom_message,
+                            warning_handler=log_notification_warning,
+                            enable_discord=send_discord,
+                            enable_notifiarr=send_notifiarr,
+                        )
+
+                    notification_sender = configured_notification_sender
+                elif self.verbose:
+                    log_widget.write_line("Detail: notifications disabled; no methods are active")
+            elif self.verbose:
+                log_widget.write_line("Detail: no notification methods configured; skipping send")
 
             async with StarrClient(app_lower, app_config.url, app_config.api_key) as client:
-                self.set_status(f"{app_name}: Setting up tags...")
-                if self.dry_run:
-                    tag = await client.get_tag(app_config.tag_name)
-                    tag_id = int(tag["id"]) if tag else 9999
-                else:
-                    tag_id = await client.get_or_create_tag(app_config.tag_name)
-                log_widget.write_line(f"Using tag: '{app_config.tag_name}' (ID: {tag_id})")
-
-                ignore_tag_id = None
-                if app_config.ignore_tag:
-                    if self.dry_run:
-                        tag = await client.get_tag(app_config.ignore_tag)
-                        ignore_tag_id = int(tag["id"]) if tag else 9998
-                    else:
-                        ignore_tag_id = await client.get_or_create_tag(app_config.ignore_tag)
-                    log_widget.write_line(
-                        f"Ignoring tag: '{app_config.ignore_tag}' (ID: {ignore_tag_id})"
-                    )
-
-                quality_profile_id = None
-                if app_config.quality_profile_name:
-                    quality_profile_id = await client.get_quality_profile_id(
-                        app_config.quality_profile_name
-                    )
-
-                self.set_status(f"{app_name}: Fetching media...")
-                all_media = await client.get_all_media()
-
-                status = getattr(app_config, STATUS_FIELDS[app_type], None)
-                media_filter = MediaFilter(
-                    monitored=app_config.monitored,
-                    tag_id=tag_id,
-                    status=status,
-                    quality_profile_id=quality_profile_id,
-                    ignore_tag_id=ignore_tag_id,
+                reporter = TuiWorkflowReporter(
+                    self,
+                    app_name,
+                    verbose_enabled=self.verbose,
+                )
+                result = await run_application(
+                    client,
+                    app_lower,
+                    app_config,
+                    count=custom_count,
+                    dry_run=self.dry_run,
+                    verbose=self.verbose,
+                    reporter=reporter,
+                    notification_sender=notification_sender,
                 )
 
-                filtered = (
-                    media_filter.filter_unattended(all_media)
-                    if app_config.unattended
-                    else media_filter.filter_attended(all_media)
-                )
-
-                if not filtered:
+                if not result.selected:
                     log_widget.write_line("No media matched filters.")
                     return
 
-                selected = select_random_media(filtered, custom_count)
-                log_widget.write_line(
-                    f"Selected {len(selected)} random items out of {len(filtered)} filtered."
-                )
-
-                # Show selected items
-                media_table.append_media(selected, app_name, app_type)
-
-                if self.dry_run:
-                    log_widget.write_line(f"DRY RUN: Would search and tag {len(selected)} items.")
-                else:
-                    self.set_status(f"{app_name}: Searching and tagging...")
-                    await client.search_media_batch(selected)
-                    media_ids = [item["id"] for item in selected]
-                    await client.add_tags_to_media(media_ids, tag_id)
-                    log_widget.write_line(
-                        f"Successfully queued search and tagged {len(selected)} items."
-                    )
+                media_table.append_media(result.selected, app_name, result.app_type)
 
                 log_widget.write_line(f"Finished processing {app_name}\n")
 
         except StarrAPIError as e:
-            log_widget.write_line(f"API Error: {e}")
+            log_widget.write_line(f"Error: API error: {e}")
         except Exception as e:
-            log_widget.write_line(f"An unexpected error occurred: {e}")
+            log_widget.write_line(f"Error: unexpected error: {e}")
             logger.exception("Error processing app")
 
     def action_refresh(self) -> None:
