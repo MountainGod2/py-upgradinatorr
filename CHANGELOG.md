@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.2.0 (2026-09-01)
+
+### Features
+
+- **core**: Implement shared application workflow orchestration for CLI and TUI
+  ([`5df5e2b`](https://github.com/MountainGod2/py-upgradinatorr/commit/5df5e2bef0121edfb57ed2a3211bb4f16dbbd692))
+
+
 ## v0.1.1 (2026-09-01)
 
 ### Bug Fixes
