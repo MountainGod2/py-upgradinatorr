@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.2.1 (2026-09-02)
+
+### Bug Fixes
+
+- **deps**: Update dependency textual to v8.2.8
+  ([#26](https://github.com/MountainGod2/py-upgradinatorr/pull/26),
+  [`7db7327`](https://github.com/MountainGod2/py-upgradinatorr/commit/7db73276b486af7db83a2d37fef849257339cea5))
+
+
 ## v0.2.0 (2026-09-01)
 
 ### Features

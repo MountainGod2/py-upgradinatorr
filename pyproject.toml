@@ -1,6 +1,6 @@
 [project]
 name = "upgradinatorr"
-version = "0.2.0"
+version = "0.2.1"
 description = "Automated media upgrade search for Starr applications"
 readme = "README.md"
 authors = [{ name = "MountainGod2", email = "admin@reid.ca" }]
