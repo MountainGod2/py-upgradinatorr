@@ -33,7 +33,7 @@ upgradinatorr = "upgradinatorr.cli:main"
 upgradinatorr-tui = "upgradinatorr.tui:run_tui"
 
 [build-system]
-requires = ["uv_build==0.12.9"]
+requires = ["uv_build==0.12.10"]
 build-backend = "uv_build"
 
 [tool.uv]
