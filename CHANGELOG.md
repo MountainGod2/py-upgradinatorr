@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.2.2 (2026-09-06)
+
+### Bug Fixes
+
+- **deps**: Update dependency rich-click to v1.9.9
+  ([#47](https://github.com/MountainGod2/py-upgradinatorr/pull/47),
+  [`a35fb0a`](https://github.com/MountainGod2/py-upgradinatorr/commit/a35fb0a8f38f32059462aba6e932fa421f385aca))
+
+
 ## v0.2.1 (2026-09-02)
 
 ### Bug Fixes
