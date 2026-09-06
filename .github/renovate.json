@@ -19,5 +19,9 @@
   },
   "lockFileMaintenance": {
     "enabled": true
+    "automerge": true
+  },
+  "registryAliases": {
+    "dhi.io": "dhi.io"
   }
 }
