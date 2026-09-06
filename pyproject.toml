@@ -10,7 +10,7 @@ dependencies = [
     "pydantic==2.13.5",
     "pydantic-settings==2.15.0",
     "rich==15.0.0",
-    "rich-click==1.9.8",
+    "rich-click==1.9.9",
     "stamina==25.2.0",
     "textual==8.2.8",
     "textual-dev==1.8.0",
