@@ -1,25 +1,25 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "automergeType": "pr",
   "extends": [
     "config:best-practices"
   ],
-  "automergeType": "pr",
+  "lockFileMaintenance": {
+    "automerge": true,
+    "enabled": true
+  },
   "packageRules": [
     {
+      "automerge": true,
       "matchUpdateTypes": [
         "patch",
         "minor",
         "digest"
-      ],
-      "automerge": true
+      ]
     }
   ],
   "pre-commit": {
     "enabled": true
-  },
-  "lockFileMaintenance": {
-    "enabled": true
-    "automerge": true
   },
   "registryAliases": {
     "dhi.io": "dhi.io"
