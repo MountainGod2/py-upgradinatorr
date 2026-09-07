@@ -7,6 +7,7 @@ on:
 
 jobs:
   build:
+    name: Build
     runs-on: ubuntu-latest
     if: ${{ github.repository == 'MountainGod2/py-upgradinatorr' }}
     permissions:
@@ -69,6 +70,7 @@ jobs:
       lock-file-artifact: ${{ env.lock_file_artifact }}
 
   test-release-artifacts:
+    name: Test release artifacts
     needs: build
     runs-on: ubuntu-latest
     if: ${{ needs.build.outputs.new-release-detected == 'true' }}
@@ -107,6 +109,7 @@ jobs:
           uv run upgradinatorr --version
 
   release:
+    name: Release
     runs-on: ubuntu-latest
     needs:
       - build
@@ -171,7 +174,7 @@ jobs:
       new-release-tag: ${{ steps.release.outputs.tag }}
 
   deploy:
-    name: deploy
+    name: Deploy
     runs-on: ubuntu-latest
     if: ${{ needs.release.outputs.released == 'true' && github.repository == 'MountainGod2/py-upgradinatorr' }}
     needs:
