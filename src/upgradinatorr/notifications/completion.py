@@ -26,8 +26,7 @@ def _build_notification_description(
     title_list = "\n".join(f"- {title}" for title in titles)
 
     description = (
-        f"Search started for {len(media_items)} media items in {app_name.title()}:\n"
-        f"{title_list}"
+        f"Search started for {len(media_items)} media items in {app_name.title()}:\n{title_list}"
     )
 
     if len(description) > MAX_DISCORD_DESCRIPTION_LENGTH:
