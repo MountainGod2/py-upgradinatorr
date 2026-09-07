@@ -1,5 +1,5 @@
 # Stage 1: Builder
-FROM dhi.io/python:3.14-debian12-dev AS builder
+FROM dhi.io/python:3.14-debian12-dev@sha256:729c3cd62bf2239d06877d53dfadd862bfc4a27c1c84ba388f0223b0a9955f79 AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 
@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
 # Stage 2: Runtime
-FROM dhi.io/python:3.14-debian12
+FROM dhi.io/python:3.14-debian12@sha256:9ee3b7d7dd21d8bf622d59ceefb26a64caa85ccad7a3e9abe6a1e2449712c59d
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
