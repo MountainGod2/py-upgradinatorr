@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.3.3 (2026-09-08)
+
+### Bug Fixes
+
+- **cli**: Format warning handler lambda
+  ([`e83ab1d`](https://github.com/MountainGod2/py-upgradinatorr/commit/e83ab1d00d52b271d9678f31c7a92908ff52f3f7))
+
+
 ## v0.3.2 (2026-09-08)
 
 ### Bug Fixes
