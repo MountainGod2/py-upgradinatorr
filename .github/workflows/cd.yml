@@ -130,6 +130,7 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup | Force release branch to be at workflow sha
         env:
@@ -158,6 +159,12 @@ jobs:
 
       - name: Setup | Stage Lock File for Version Commit
         run: git add uv.lock
+
+      - name: Setup | Configure git authentication for release push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
 
       - name: Release | Create Release
         id: release

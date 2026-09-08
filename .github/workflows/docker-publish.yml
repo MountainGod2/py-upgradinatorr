@@ -1,0 +1,91 @@
+name: Docker Publish
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
+env:
+  IMAGE_NAME: upgradinatorr
+
+jobs:
+  publish:
+    name: Build and publish container image
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'MountainGod2/py-upgradinatorr' }}
+    timeout-minutes: 30
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Setup | Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup | Set up QEMU
+        uses: docker/setup-qemu-action@7d8b440d7549436e06a4f28937e7d2d1f7f1c5e5 # v3.6.0
+
+      - name: Setup | Set up Docker Buildx
+        uses: docker/setup-buildx-action@4f1b27434d96943248a6f6b0fcd8246386c3f07e # v3.11.1
+
+      - name: Auth | Login to GHCR
+        uses: docker/login-action@3f9cf3281d69b26e5fd6f47b01a7eb1f997b0f2a # v3.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auth | Login to Docker Hub (optional)
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        uses: docker/login-action@3f9cf3281d69b26e5fd6f47b01a7eb1f997b0f2a # v3.8.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Metadata | Generate image tags and labels
+        id: meta
+        uses: docker/metadata-action@902fa8ec7f2b0f8ce9fde8b7f01f57f2b0430486 # v5.8.0
+        with:
+          images: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+            ${{ secrets.DOCKERHUB_USERNAME != '' && format('{0}/{1}', secrets.DOCKERHUB_USERNAME, env.IMAGE_NAME) || '' }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build | Build and push image
+        id: build
+        uses: docker/build-push-action@5ce4c1f447cf5e5ee8f5e616b17f58dbfa0f06fd # v6.18.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          pull: true
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify | Attest build provenance for GHCR image
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v3.0.0
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
