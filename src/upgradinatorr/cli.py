@@ -312,7 +312,9 @@ async def process_application(
                         media_items=media_items,
                         notifications=notifications,
                         custom_message=custom_message,
-                        warning_handler=lambda message: console.print(f"[yellow]  {message}[/yellow]"),
+                        warning_handler=lambda message: console.print(
+                            f"[yellow]  {message}[/yellow]"
+                        ),
                     )
                 )
 
