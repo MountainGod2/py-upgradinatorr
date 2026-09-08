@@ -16,6 +16,13 @@ import subprocess
 import sys
 
 
+def _parse_env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except ValueError:
+        return default
+
+
 def safe_chown(
     path: str | os.PathLike[str], uid: int, gid: int, *, recursive: bool = False
 ) -> None:
@@ -44,21 +51,71 @@ def safe_chown(
             pass
 
 
+def _apply_config_ownership(puid: int, pgid: int, *, recursive: bool) -> None:
+    if recursive:
+        safe_chown("/config", puid, pgid, recursive=True)
+        return
+
+    with contextlib.suppress(OSError):
+        config_dir = pathlib.Path("/config")
+        for entry in config_dir.iterdir():
+            try:
+                stat_result = entry.stat()
+                if stat_result.st_uid == 0:
+                    os.chown(entry, puid, pgid)
+            except OSError:
+                pass
+
+
+def _seed_config(
+    config_path: str,
+    example_config_path: str,
+    puid: int,
+    pgid: int,
+    *,
+    enabled: bool,
+) -> None:
+    if not enabled:
+        return
+
+    if pathlib.Path(config_path).exists() or not pathlib.Path(example_config_path).exists():
+        return
+
+    with contextlib.suppress(OSError):
+        shutil.copy2(example_config_path, config_path)
+        os.chown(config_path, puid, pgid)
+
+
+def _drop_privileges(puid: int, pgid: int) -> None:
+    if hasattr(os, "setgid") and hasattr(os, "setuid"):
+        with contextlib.suppress(OSError):
+            os.setgroups([])
+        with contextlib.suppress(OSError):
+            os.setgid(pgid)
+        with contextlib.suppress(OSError):
+            os.setuid(puid)
+
+
+def _exec_application(app_command: str) -> int:
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    cmd_path = shutil.which(app_command)
+    if not cmd_path:
+        cmd_path = app_command
+
+    result = subprocess.run([cmd_path, *sys.argv[1:]], check=False)  # noqa: S603
+    return result.returncode
+
+
 def main() -> None:
     """Execute the entrypoint logic for the Docker container.
 
     Sets up the environment, manages permissions, and executes the application
     with appropriate privileges.
     """
-    try:
-        puid = int(os.environ.get("PUID", "999"))
-    except ValueError:
-        puid = 999
-
-    try:
-        pgid = int(os.environ.get("PGID", "999"))
-    except ValueError:
-        pgid = 999
+    puid = _parse_env_int("PUID", 999)
+    pgid = _parse_env_int("PGID", 999)
 
     chown_config_recursive = os.environ.get("CHOWN_CONFIG_RECURSIVE", "0") == "1"
     seed_config = os.environ.get("SEED_CONFIG", "1") == "1"
@@ -76,50 +133,18 @@ def main() -> None:
     safe_chown("/config", puid, pgid)
     safe_chown(xdg_cache_home, puid, pgid, recursive=True)
 
-    if chown_config_recursive:
-        safe_chown("/config", puid, pgid, recursive=True)
-    else:
-        with contextlib.suppress(OSError):
-            config_dir = pathlib.Path("/config")
-            for entry in config_dir.iterdir():
-                try:
-                    s = entry.stat()
-                    if s.st_uid == 0:
-                        os.chown(entry, puid, pgid)
-                except OSError:
-                    pass
+    _apply_config_ownership(puid, pgid, recursive=chown_config_recursive)
+    _seed_config(
+        config_path,
+        example_config_path,
+        puid,
+        pgid,
+        enabled=seed_config,
+    )
+    _drop_privileges(puid, pgid)
 
-    if (
-        seed_config
-        and not pathlib.Path(config_path).exists()
-        and pathlib.Path(example_config_path).exists()
-    ):
-        with contextlib.suppress(OSError):
-            shutil.copy2(example_config_path, config_path)
-            os.chown(config_path, puid, pgid)
-
-    # Drop privileges by switching to pgid then puid
-    if hasattr(os, "setgid") and hasattr(os, "setuid"):
-        with contextlib.suppress(OSError):
-            os.setgroups([])  # Drop supplementary groups if any
-
-        with contextlib.suppress(OSError):
-            os.setgid(pgid)
-        with contextlib.suppress(OSError):
-            os.setuid(puid)
-
-    # Exec application
     try:
-        sys.stdout.flush()
-        sys.stderr.flush()
-
-        # We need to search the PATH for the command if it's not an absolute path
-        cmd_path = shutil.which(app_command)
-        if not cmd_path:
-            cmd_path = app_command
-
-        result = subprocess.run([cmd_path, *sys.argv[1:]], check=False)  # noqa: S603
-        sys.exit(result.returncode)
+        sys.exit(_exec_application(app_command))
     except OSError:
         sys.exit(1)
 

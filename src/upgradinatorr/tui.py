@@ -26,9 +26,17 @@ from upgradinatorr.config import (
     parse_ini_config,
     validate_application_name,
 )
-from upgradinatorr.core import NotificationSender, WorkflowReporter, run_application
+from upgradinatorr.core import (
+    ApplicationRunRequest,
+    NotificationSender,
+    WorkflowReporter,
+    run_application,
+)
 from upgradinatorr.media_display import build_media_display_row
-from upgradinatorr.notifications.completion import send_completion_notification
+from upgradinatorr.notifications.completion import (
+    CompletionNotificationRequest,
+    send_completion_notification,
+)
 from upgradinatorr.starr.client import StarrAPIError, StarrClient
 
 logger = logging.getLogger(__name__)
@@ -314,6 +322,66 @@ class UpgradinatorTUI(App[None]):
         if notifiarr_switch:
             notifiarr_switch.disabled = not has_notifiarr
 
+    def _resolve_app_config(self, app_name: str) -> tuple[str | None, ApplicationConfig | None]:
+        app_lower = app_name.lower()
+        app_config_key = next(
+            (key for key in self.config_dict if key.lower() == app_lower), None
+        )
+        if not app_config_key:
+            return None, None
+
+        return app_config_key, ApplicationConfig(**self.config_dict[app_config_key])
+
+    def _resolve_count(self, app_config: ApplicationConfig) -> int | str | None:
+        count_input = self.query_one("#global-count", Input).value
+        custom_count = app_config.count
+        if count_input and count_input.isdigit():
+            custom_count = int(count_input)
+        return custom_count
+
+    def _build_notification_sender(
+        self,
+        log_widget: Log,
+        notifications: NotificationConfig | None,
+    ) -> NotificationSender | None:
+        if notifications is None:
+            if self.verbose:
+                log_widget.write_line("Detail: no notification methods configured; skipping send")
+            return None
+
+        send_discord = self.notify_discord_enabled and bool(notifications.discord_webhook)
+        send_notifiarr = self.notify_notifiarr_enabled and bool(
+            notifications.notifiarr_webhook and notifications.notifiarr_channel_id,
+        )
+
+        def log_notification_warning(message: str) -> None:
+            """Write notification warnings to the TUI log."""
+            log_widget.write_line(f"Warning: {message}")
+
+        if not send_discord and not send_notifiarr:
+            if self.verbose:
+                log_widget.write_line("Detail: notifications disabled; no methods are active")
+            return None
+
+        async def configured_notification_sender(
+            notif_app_name: str,
+            media_items: list[dict[str, Any]],
+            custom_message: str | None = None,
+        ) -> None:
+            await send_completion_notification(
+                CompletionNotificationRequest(
+                    app_name=notif_app_name,
+                    media_items=media_items,
+                    notifications=notifications,
+                    custom_message=custom_message,
+                    warning_handler=log_notification_warning,
+                    enable_discord=send_discord,
+                    enable_notifiarr=send_notifiarr,
+                )
+            )
+
+        return configured_notification_sender
+
     async def load_config(self) -> None:
         """Load configuration from file."""
         log_widget = self.query_one("#log-display", Log)
@@ -435,20 +503,16 @@ class UpgradinatorTUI(App[None]):
         app_lower = app_name.lower()
 
         try:
-            app_config_key = next(
-                (key for key in self.config_dict if key.lower() == app_lower), None
-            )
-
+            app_config_key, app_config = self._resolve_app_config(app_name)
             if not app_config_key:
                 log_widget.write_line(f"No config found for '{app_name}'")
                 return
 
-            app_config = ApplicationConfig(**self.config_dict[app_config_key])
+            if app_config is None:
+                log_widget.write_line(f"No config found for '{app_name}'")
+                return
 
-            count_input = self.query_one("#global-count", Input).value
-            custom_count = app_config.count
-            if count_input and count_input.isdigit():
-                custom_count = int(count_input)
+            custom_count = self._resolve_count(app_config)
 
             if self.verbose:
                 log_widget.write_line(f"Detail: URL {app_config.url}")
@@ -456,40 +520,7 @@ class UpgradinatorTUI(App[None]):
                     f"Detail: tag '{app_config.tag_name}' | items {custom_count}",
                 )
 
-            notification_sender: NotificationSender | None = None
-            notifications = self.notifications
-            if notifications is not None:
-                send_discord = self.notify_discord_enabled and bool(notifications.discord_webhook)
-                send_notifiarr = self.notify_notifiarr_enabled and bool(
-                    notifications.notifiarr_webhook and notifications.notifiarr_channel_id,
-                )
-
-                def log_notification_warning(message: str) -> None:
-                    """Write notification warnings to the TUI log."""
-                    log_widget.write_line(f"Warning: {message}")
-
-                if send_discord or send_notifiarr:
-
-                    async def configured_notification_sender(
-                        notif_app_name: str,
-                        media_items: list[dict[str, Any]],
-                        custom_message: str | None = None,
-                    ) -> None:
-                        await send_completion_notification(
-                            notif_app_name,
-                            media_items,
-                            notifications,
-                            custom_message,
-                            warning_handler=log_notification_warning,
-                            enable_discord=send_discord,
-                            enable_notifiarr=send_notifiarr,
-                        )
-
-                    notification_sender = configured_notification_sender
-                elif self.verbose:
-                    log_widget.write_line("Detail: notifications disabled; no methods are active")
-            elif self.verbose:
-                log_widget.write_line("Detail: no notification methods configured; skipping send")
+            notification_sender = self._build_notification_sender(log_widget, self.notifications)
 
             async with StarrClient(app_lower, app_config.url, app_config.api_key) as client:
                 reporter = TuiWorkflowReporter(
@@ -498,14 +529,16 @@ class UpgradinatorTUI(App[None]):
                     verbose_enabled=self.verbose,
                 )
                 result = await run_application(
-                    client,
-                    app_lower,
-                    app_config,
-                    count=custom_count,
-                    dry_run=self.dry_run,
-                    verbose=self.verbose,
-                    reporter=reporter,
-                    notification_sender=notification_sender,
+                    ApplicationRunRequest(
+                        client=client,
+                        app_name=app_lower,
+                        config=app_config,
+                        count=custom_count,
+                        dry_run=self.dry_run,
+                        verbose=self.verbose,
+                        reporter=reporter,
+                        notification_sender=notification_sender,
+                    )
                 )
 
                 if not result.selected:

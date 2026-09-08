@@ -5,9 +5,14 @@ from http import HTTPStatus
 import pytest
 from aioresponses import aioresponses
 
-from upgradinatorr.notifications.discord import DiscordNotificationError, send_discord_notification
+from upgradinatorr.notifications.discord import (
+    DiscordNotificationError,
+    DiscordNotificationRequest,
+    send_discord_notification,
+)
 from upgradinatorr.notifications.notifiarr import (
     NotifiarrNotificationError,
+    NotifiarrNotificationRequest,
     send_notifiarr_notification,
 )
 
@@ -25,10 +30,12 @@ async def test_send_discord_notification_raises_for_non_2xx(
 
     with pytest.raises(DiscordNotificationError, match="returned"):
         await send_discord_notification(
-            webhook_url=webhook_url,
-            title="Title",
-            description="Description",
-            color=123,
+            DiscordNotificationRequest(
+                webhook_url=webhook_url,
+                title="Title",
+                description="Description",
+                color=123,
+            )
         )
 
 
@@ -46,10 +53,12 @@ async def test_send_notifiarr_notification_raises_for_unsuccessful_result(
 
     with pytest.raises(NotifiarrNotificationError, match="reported failure"):
         await send_notifiarr_notification(
-            webhook_url=webhook_url,
-            channel_id="12345678901234567",
-            app_name="radarr",
-            title="Title",
-            description="Description",
-            color="FFC230",
+            NotifiarrNotificationRequest(
+                webhook_url=webhook_url,
+                channel_id="12345678901234567",
+                app_name="radarr",
+                title="Title",
+                description="Description",
+                color="FFC230",
+            )
         )

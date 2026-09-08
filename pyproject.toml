@@ -69,10 +69,6 @@ lint.select = ["ALL"]
 lint.ignore = ["COM812", "CPY001"]
 lint.pydocstyle.convention = "google"
 lint.explicit-preview-rules = true
-lint.mccabe.max-complexity = 35
-lint.pylint.max-branches = 50
-lint.pylint.max-statements = 120
-lint.pylint.max-args = 10
 lint.per-file-ignores = { "tests/*" = ["ANN401", "INP001", "S101", "SLF001"] }
 format.quote-style = "double"
 format.indent-style = "space"

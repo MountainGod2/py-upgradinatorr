@@ -35,6 +35,32 @@ NotificationSender = Callable[
 ]
 
 
+@dataclass(slots=True)
+class ApplicationRunRequest:
+    """Inputs required to run the shared application workflow."""
+
+    client: StarrClient
+    app_name: str
+    config: ApplicationConfig
+    count: int | str | None = None
+    dry_run: bool = False
+    verbose: bool = False
+    reporter: WorkflowReporter | None = None
+    notification_sender: NotificationSender | None = None
+
+
+@dataclass(slots=True)
+class UnattendedModeRequest:
+    """Inputs required to cycle unattended tags."""
+
+    workflow: ApplicationRunRequest
+    reporter: WorkflowReporter
+    tag_id: int
+    ignore_tag_id: int | None
+    quality_profile_id: int | None
+    all_media: list[dict[str, Any]]
+
+
 class NullWorkflowReporter:
     """No-op reporter for callers that do not need progress output."""
 
@@ -163,109 +189,133 @@ def _build_media_filter(
 
 
 async def _handle_unattended_mode(
-    client: StarrClient,
-    app_name: str,
-    config: ApplicationConfig,
-    reporter: WorkflowReporter,
-    tag_id: int,
-    ignore_tag_id: int | None,
-    quality_profile_id: int | None,
-    all_media: list[dict[str, Any]],
-    *,
-    dry_run: bool,
+    request: UnattendedModeRequest,
 ) -> tuple[list[dict[str, Any]], bool]:
-    reporter.info("No untagged media; cycling tags...")
+    request.reporter.info("No untagged media; cycling tags...")
 
-    media_filter = _build_media_filter(app_name, config, tag_id, ignore_tag_id, quality_profile_id)
-    tagged_media = media_filter.filter_unattended(all_media)
+    media_filter = _build_media_filter(
+        request.workflow.app_name,
+        request.workflow.config,
+        request.tag_id,
+        request.ignore_tag_id,
+        request.quality_profile_id,
+    )
+    tagged_media = media_filter.filter_unattended(request.all_media)
 
     if not tagged_media:
-        reporter.warning(
+        request.reporter.warning(
             "No media currently has the unattended tag "
-            f"'{config.tag_name}' in {app_name.title()}. "
+            f"'{request.workflow.config.tag_name}' in {request.workflow.app_name.title()}. "
             "This is usually a configuration issue; if unexpected, open an issue at "
             "https://github.com/mountaingod2/upgradinatorr/issues",
         )
         return [], False
 
     media_ids = [item["id"] for item in tagged_media]
-    if dry_run:
-        reporter.warning(f"would remove tag from {len(media_ids)} items")
-        for item in all_media:
-            if item.get("id") in media_ids and "tags" in item and tag_id in item["tags"]:
-                item["tags"].remove(tag_id)
-        updated_media = all_media
+    if request.workflow.dry_run:
+        request.reporter.warning(f"would remove tag from {len(media_ids)} items")
+        for item in request.all_media:
+            if (
+                item.get("id") in media_ids
+                and "tags" in item
+                and request.tag_id in item["tags"]
+            ):
+                item["tags"].remove(request.tag_id)
+        updated_media = request.all_media
     else:
-        await client.remove_tags_from_media(media_ids, tag_id)
-        updated_media = await client.get_all_media()
+        await request.workflow.client.remove_tags_from_media(media_ids, request.tag_id)
+        updated_media = await request.workflow.client.get_all_media()
 
     return media_filter.filter_attended(updated_media), True
 
 
-async def run_application(
-    client: StarrClient,
-    app_name: str,
-    config: ApplicationConfig,
-    *,
-    count: int | str | None = None,
-    dry_run: bool = False,
-    verbose: bool = False,
-    reporter: WorkflowReporter | None = None,
-    notification_sender: NotificationSender | None = None,
-) -> ApplicationRunResult:
+async def _process_selected_media(
+    request: ApplicationRunRequest,
+    reporter: WorkflowReporter,
+    selected: list[dict[str, Any]],
+    tag_id: int,
+) -> None:
+    if request.dry_run:
+        reporter.warning(f"would search {len(selected)} items")
+        reporter.warning(f"would tag {len(selected)} items")
+        if request.notification_sender:
+            reporter.warning("would send notification")
+        return
+
+    reporter.status("Searching...")
+    await request.client.search_media_batch(selected)
+    reporter.success(f"search queued for {len(selected)} items")
+
+    media_ids = [item["id"] for item in selected]
+    reporter.status("Tagging...")
+    await request.client.add_tags_to_media(media_ids, tag_id)
+    reporter.success(f"tagged {len(media_ids)} items")
+
+    if request.notification_sender:
+        reporter.status("Notifying...")
+        await request.notification_sender(request.app_name, selected, None)
+        reporter.success("notification sent")
+
+
+async def run_application(request: ApplicationRunRequest) -> ApplicationRunResult:
     """Run the full workflow for one configured Starr application."""
-    app_name = app_name.lower()
-    app_type = get_application_type(app_name)
-    active_reporter = reporter or NullWorkflowReporter()
+    request.app_name = request.app_name.lower()
+    app_type = get_application_type(request.app_name)
+    active_reporter = request.reporter or NullWorkflowReporter()
 
     active_reporter.status("Setting up tags...")
     tag_id, ignore_tag_id = await _setup_tags(
-        client,
-        config,
+        request.client,
+        request.config,
         active_reporter,
-        dry_run=dry_run,
-        verbose=verbose,
+        dry_run=request.dry_run,
+        verbose=request.verbose,
     )
 
     active_reporter.status("Checking quality profile...")
     quality_profile_id = await _setup_quality_profile(
-        client,
-        config,
+        request.client,
+        request.config,
         active_reporter,
-        verbose=verbose,
+        verbose=request.verbose,
     )
 
     active_reporter.status("Fetching media...")
-    all_media = await client.get_all_media()
-    media_filter = _build_media_filter(app_name, config, tag_id, ignore_tag_id, quality_profile_id)
+    all_media = await request.client.get_all_media()
+    media_filter = _build_media_filter(
+        request.app_name,
+        request.config,
+        tag_id,
+        ignore_tag_id,
+        quality_profile_id,
+    )
 
     filtered = (
         media_filter.filter_unattended(all_media)
-        if config.unattended
+        if request.config.unattended
         else media_filter.filter_attended(all_media)
     )
 
-    if verbose:
+    if request.verbose:
         active_reporter.verbose(f"{len(all_media)} total -> {len(filtered)} match filter")
 
     cycled_unattended_tags = False
     if not filtered:
-        if config.unattended:
+        if request.config.unattended:
             filtered, cycled_unattended_tags = await _handle_unattended_mode(
-                client,
-                app_name,
-                config,
-                active_reporter,
-                tag_id,
-                ignore_tag_id,
-                quality_profile_id,
-                all_media,
-                dry_run=dry_run,
+                UnattendedModeRequest(
+                    workflow=request,
+                    reporter=active_reporter,
+                    tag_id=tag_id,
+                    ignore_tag_id=ignore_tag_id,
+                    quality_profile_id=quality_profile_id,
+                    all_media=all_media,
+                )
             )
             if not filtered:
                 active_reporter.info("No media left to process in unattended mode")
                 return ApplicationRunResult(
-                    app_name=app_name,
+                    app_name=request.app_name,
                     app_type=app_type,
                     tag_id=tag_id,
                     ignore_tag_id=ignore_tag_id,
@@ -276,11 +326,11 @@ async def run_application(
                     cycled_unattended_tags=cycled_unattended_tags,
                 )
         else:
-            active_reporter.info(f"No {app_name} media matched; skipping")
-            if notification_sender:
-                await notification_sender(app_name, [], "No media left to search")
+            active_reporter.info(f"No {request.app_name} media matched; skipping")
+            if request.notification_sender:
+                await request.notification_sender(request.app_name, [], "No media left to search")
             return ApplicationRunResult(
-                app_name=app_name,
+                app_name=request.app_name,
                 app_type=app_type,
                 tag_id=tag_id,
                 ignore_tag_id=ignore_tag_id,
@@ -291,33 +341,15 @@ async def run_application(
                 cycled_unattended_tags=False,
             )
 
-    selected_count = count if count is not None else config.count
+    selected_count = request.count if request.count is not None else request.config.count
     selected = select_random_media(filtered, selected_count)
 
     active_reporter.info(f"{len(filtered)} candidates -> {len(selected)} selected")
 
-    if dry_run:
-        active_reporter.warning(f"would search {len(selected)} items")
-        active_reporter.warning(f"would tag {len(selected)} items")
-        if notification_sender:
-            active_reporter.warning("would send notification")
-    else:
-        active_reporter.status("Searching...")
-        await client.search_media_batch(selected)
-        active_reporter.success(f"search queued for {len(selected)} items")
-
-        media_ids = [item["id"] for item in selected]
-        active_reporter.status("Tagging...")
-        await client.add_tags_to_media(media_ids, tag_id)
-        active_reporter.success(f"tagged {len(media_ids)} items")
-
-        if notification_sender:
-            active_reporter.status("Notifying...")
-            await notification_sender(app_name, selected, None)
-            active_reporter.success("notification sent")
+    await _process_selected_media(request, active_reporter, selected, tag_id)
 
     return ApplicationRunResult(
-        app_name=app_name,
+        app_name=request.app_name,
         app_type=app_type,
         tag_id=tag_id,
         ignore_tag_id=ignore_tag_id,

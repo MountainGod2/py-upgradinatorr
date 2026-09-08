@@ -1,16 +1,35 @@
 """Shared completion notification helper."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from upgradinatorr.config import NotificationConfig, get_application_type
 from upgradinatorr.constants import APP_COLORS, MAX_DISCORD_DESCRIPTION_LENGTH
-from upgradinatorr.notifications.discord import DiscordNotificationError, send_discord_notification
+from upgradinatorr.notifications.discord import (
+    DiscordNotificationError,
+    DiscordNotificationRequest,
+    send_discord_notification,
+)
 from upgradinatorr.notifications.notifiarr import (
     NotifiarrNotificationError,
+    NotifiarrNotificationRequest,
     send_notifiarr_notification,
 )
 from upgradinatorr.starr.media import get_media_title
+
+
+@dataclass(slots=True)
+class CompletionNotificationRequest:
+    """Parameters for sending completion notifications."""
+
+    app_name: str
+    media_items: list[dict[str, Any]]
+    notifications: NotificationConfig
+    custom_message: str | None = None
+    warning_handler: Callable[[str], None] | None = None
+    enable_discord: bool = True
+    enable_notifiarr: bool = True
 
 
 def _build_notification_description(
@@ -39,46 +58,50 @@ def _build_notification_description(
     return description
 
 
-async def send_completion_notification(
-    app_name: str,
-    media_items: list[dict[str, Any]],
-    notifications: NotificationConfig,
-    custom_message: str | None = None,
-    warning_handler: Callable[[str], None] | None = None,
-    *,
-    enable_discord: bool = True,
-    enable_notifiarr: bool = True,
-) -> None:
+async def send_completion_notification(request: CompletionNotificationRequest) -> None:
     """Send completion notification to configured webhook destinations."""
-    app_type = get_application_type(app_name)
+    app_type = get_application_type(request.app_name)
     colors = APP_COLORS.get(app_type, APP_COLORS["radarr"])
-    description = _build_notification_description(app_name, app_type, media_items, custom_message)
+    description = _build_notification_description(
+        request.app_name,
+        app_type,
+        request.media_items,
+        request.custom_message,
+    )
 
-    if enable_discord and notifications.discord_webhook:
+    if request.enable_discord and request.notifications.discord_webhook:
         try:
             await send_discord_notification(
-                webhook_url=notifications.discord_webhook,
-                title=f"Upgradinatorr - {app_name.title()}",
-                description=description,
-                color=colors["decimal"],
-                thumbnail_url=colors["thumbnail"],
+                DiscordNotificationRequest(
+                    webhook_url=request.notifications.discord_webhook,
+                    title=f"Upgradinatorr - {request.app_name.title()}",
+                    description=description,
+                    color=colors["decimal"],
+                    thumbnail_url=colors["thumbnail"],
+                )
             )
         except DiscordNotificationError as error:
-            if warning_handler:
-                warning_handler(f"discord: {error}")
+            if request.warning_handler:
+                request.warning_handler(f"discord: {error}")
 
-    if enable_notifiarr and notifications.notifiarr_webhook and notifications.notifiarr_channel_id:
+    if (
+        request.enable_notifiarr
+        and request.notifications.notifiarr_webhook
+        and request.notifications.notifiarr_channel_id
+    ):
         try:
             await send_notifiarr_notification(
-                webhook_url=notifications.notifiarr_webhook,
-                channel_id=notifications.notifiarr_channel_id,
-                app_name=f"Upgradinatorr - {app_name.title()}",
-                title=f"Upgradinatorr - {app_name.title()}",
-                description=description,
-                color=colors["hex"],
-                thumbnail_url=colors["thumbnail"],
+                NotifiarrNotificationRequest(
+                    webhook_url=request.notifications.notifiarr_webhook,
+                    channel_id=request.notifications.notifiarr_channel_id,
+                    app_name=f"Upgradinatorr - {request.app_name.title()}",
+                    title=f"Upgradinatorr - {request.app_name.title()}",
+                    description=description,
+                    color=colors["hex"],
+                    thumbnail_url=colors["thumbnail"],
+                )
             )
         except NotifiarrNotificationError as error:
-            if warning_handler:
-                warning_handler(f"notifiarr: {error}")
+            if request.warning_handler:
+                request.warning_handler(f"notifiarr: {error}")
             raise

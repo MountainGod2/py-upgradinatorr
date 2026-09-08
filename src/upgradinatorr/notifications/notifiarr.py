@@ -1,6 +1,7 @@
 """Notifiarr passthrough notifications."""
 
 import logging
+from dataclasses import dataclass, field
 from http import HTTPStatus
 from typing import Any
 
@@ -13,27 +14,25 @@ class NotifiarrNotificationError(Exception):
     """Raised when a Notifiarr notification fails to send."""
 
 
-async def send_notifiarr_notification(
-    webhook_url: str,
-    channel_id: str,
-    app_name: str,
-    title: str,
-    description: str,
-    color: str,
-    thumbnail_url: str | None = None,
-    **kwargs: Any,  # noqa: ANN401
-) -> None:
+@dataclass(slots=True)
+class NotifiarrNotificationRequest:
+    """Parameters for a Notifiarr passthrough request."""
+
+    webhook_url: str
+    channel_id: str
+    app_name: str
+    title: str
+    description: str
+    color: str
+    thumbnail_url: str | None = None
+    extra_fields: dict[str, Any] = field(default_factory=dict)
+
+
+async def send_notifiarr_notification(request: NotifiarrNotificationRequest) -> None:
     """Send notification via Notifiarr passthrough integration.
 
     Args:
-        webhook_url: Notifiarr webhook URL
-        channel_id: Discord channel ID
-        app_name: Application name
-        title: Notification title
-        description: Notification description
-        color: Embed color (hex)
-        thumbnail_url: Optional thumbnail URL
-        **kwargs: Additional notification parameters
+        request: Notifiarr passthrough request parameters.
 
     Raises:
         NotifiarrNotificationError: If the webhook request fails.
@@ -41,36 +40,36 @@ async def send_notifiarr_notification(
     """
     payload = {
         "notification": {
-            "name": app_name,
-            "update": kwargs.get("update", False),
-            "event": kwargs.get("event", ""),
+            "name": request.app_name,
+            "update": request.extra_fields.get("update", False),
+            "event": request.extra_fields.get("event", ""),
         },
         "discord": {
-            "color": color,
+            "color": request.color,
             "ping": {
-                "pingUser": kwargs.get("ping_user"),
-                "pingRole": kwargs.get("ping_role"),
+                "pingUser": request.extra_fields.get("ping_user"),
+                "pingRole": request.extra_fields.get("ping_role"),
             },
             "images": {
-                "thumbnail": thumbnail_url,
-                "image": kwargs.get("image_url"),
+                "thumbnail": request.thumbnail_url,
+                "image": request.extra_fields.get("image_url"),
             },
             "text": {
-                "title": title,
-                "icon": kwargs.get("icon_url"),
-                "content": kwargs.get("content"),
-                "description": description,
-                "fields": kwargs.get("fields"),
-                "footer": kwargs.get("footer"),
+                "title": request.title,
+                "icon": request.extra_fields.get("icon_url"),
+                "content": request.extra_fields.get("content"),
+                "description": request.description,
+                "fields": request.extra_fields.get("fields"),
+                "footer": request.extra_fields.get("footer"),
             },
-            "ids": {"channel": int(channel_id)},
+            "ids": {"channel": int(request.channel_id)},
         },
     }
 
     async with (
         aiohttp.ClientSession() as session,
         session.post(
-            webhook_url,
+            request.webhook_url,
             json=payload,
             headers={"Accept": "text/plain"},
         ) as response,

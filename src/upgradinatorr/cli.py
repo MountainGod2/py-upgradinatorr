@@ -21,9 +21,17 @@ from upgradinatorr.config import (
 from upgradinatorr.constants import (
     APP_COLORS,
 )
-from upgradinatorr.core import NotificationSender, WorkflowReporter, run_application
+from upgradinatorr.core import (
+    ApplicationRunRequest,
+    NotificationSender,
+    WorkflowReporter,
+    run_application,
+)
 from upgradinatorr.media_display import build_media_display_row
-from upgradinatorr.notifications.completion import send_completion_notification
+from upgradinatorr.notifications.completion import (
+    CompletionNotificationRequest,
+    send_completion_notification,
+)
 from upgradinatorr.starr.client import StarrAPIError, StarrClient
 
 console = Console(width=100)
@@ -49,65 +57,187 @@ def get_app_style(app_name: str) -> str:
     return "#FFFFFF"
 
 
-def create_media_table(media_items: list[dict[str, Any]], app_name: str) -> Table:
-    """Create a formatted table for media items."""
+def _get_app_type(app_name: str) -> str:
     try:
-        app_type = get_application_type(app_name)
+        return get_application_type(app_name)
     except ValueError:
-        app_type = app_name.lower()
+        return app_name.lower()
 
-    app_style = get_app_style(app_name)
-    table = Table(box=box.SIMPLE, border_style=app_style, show_header=True, pad_edge=False)
 
-    if app_type == "radarr":
+def _add_media_columns(table: Table, app_type: str) -> None:
+    if app_type in {"radarr", "sonarr"}:
         table.add_column("Title", style="white")
         table.add_column("Year", style="cyan", justify="right")
         table.add_column("Status", style="magenta")
         table.add_column("Monitored", justify="center")
-    elif app_type == "sonarr":
-        table.add_column("Title", style="white")
-        table.add_column("Year", style="cyan", justify="right")
-        table.add_column("Status", style="magenta")
-        table.add_column("Monitored", justify="center")
-        table.add_column("Seasons", justify="right", style="green")
-    elif app_type == "lidarr":
+        if app_type == "sonarr":
+            table.add_column("Seasons", justify="right", style="green")
+        return
+
+    if app_type == "lidarr":
         table.add_column("Artist", style="white")
         table.add_column("Status", style="magenta")
         table.add_column("Monitored", justify="center")
-    elif app_type == "readarr":
+        return
+
+    if app_type == "readarr":
         table.add_column("Author", style="white")
         table.add_column("Status", style="magenta")
         table.add_column("Monitored", justify="center")
 
+
+def _style_status(status: str) -> str:
+    normalized = status.lower()
+    if normalized in {"continuing", "released", "announced"}:
+        return f"[green]{status}[/green]"
+    if normalized in {"ended", "missing"}:
+        return f"[red]{status}[/red]"
+    return status
+
+
+def create_media_table(media_items: list[dict[str, Any]], app_name: str) -> Table:
+    """Create a formatted table for media items."""
+    app_type = _get_app_type(app_name)
+
+    app_style = get_app_style(app_name)
+    table = Table(box=box.SIMPLE, border_style=app_style, show_header=True, pad_edge=False)
+
+    _add_media_columns(table, app_type)
+
     for item in media_items:
         row = build_media_display_row(item, app_type)
         monitored = "Yes" if row.monitored else "No"
-        status = row.status
+        status = _style_status(row.status)
 
-        if status.lower() in ["continuing", "released", "announced"]:
-            status = f"[green]{status}[/green]"
-        elif status.lower() in ["ended", "missing"]:
-            status = f"[red]{status}[/red]"
-
-        if app_type == "radarr":
-            table.add_row(
-                row.title,
-                row.year,
-                status,
-                monitored,
-            )
-        elif app_type == "sonarr":
-            table.add_row(
-                row.title,
-                row.year,
-                status,
-                monitored,
-                row.extra.replace("S: ", ""),
-            )
-        elif app_type in {"lidarr", "readarr"}:
-            table.add_row(row.title, status, monitored)
+        if app_type == "sonarr":
+            table.add_row(row.title, row.year, status, monitored, row.extra.replace("S: ", ""))
+        elif app_type in {"radarr", "lidarr", "readarr"}:
+            values = [row.title, status, monitored]
+            if app_type == "radarr":
+                values.insert(1, row.year)
+            table.add_row(*values)
 
     return table
+
+
+def _normalize_applications(applications: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(
+        app_name.strip()
+        for application_group in applications
+        for app_name in application_group.split(",")
+        if app_name.strip()
+    )
+
+
+def _load_notifications(config_dict: dict[str, Any]) -> NotificationConfig | None:
+    if "Notifications" not in config_dict:
+        return None
+
+    try:
+        return NotificationConfig(**config_dict["Notifications"])
+    except (ValidationError, ValueError) as e:
+        console.print(f"[red]Error: invalid notification config: {e}[/red]")
+        raise click.Abort from e
+    except Exception as e:
+        logger.exception("Unexpected error parsing notification config")
+        console.print(f"[red]Error: notification config error: {e}[/red]")
+        raise click.Abort from e
+
+
+async def _process_cli_application(
+    app_name: str,
+    config_dict: dict[str, Any],
+    notifications: NotificationConfig | None,
+    *,
+    verbose: bool,
+    dry_run: bool,
+) -> None:
+    app_lower = app_name.lower()
+
+    validate_application_name(app_lower)
+
+    app_config_key = next((key for key in config_dict if key.lower() == app_lower), None)
+    if not app_config_key:
+        console.print(f"[red]Error: no config section for '{app_name}'[/red]")
+        raise click.Abort
+
+    app_config = ApplicationConfig(**cast("dict[str, Any]", config_dict[app_config_key]))
+    app_style = get_app_style(app_name)
+
+    notification_sender: NotificationSender | None = None
+    if notifications:
+
+        async def configured_notification_sender(
+            notif_app_name: str,
+            media_items: list[dict[str, Any]],
+            custom_message: str | None = None,
+        ) -> None:
+            await send_completion_notification(
+                CompletionNotificationRequest(
+                    app_name=notif_app_name,
+                    media_items=media_items,
+                    notifications=notifications,
+                    custom_message=custom_message,
+                    warning_handler=lambda message: console.print(f"[yellow]  {message}[/yellow]"),
+                )
+            )
+
+        notification_sender = configured_notification_sender
+
+    async with StarrClient(app_lower, app_config.url, app_config.api_key) as client:
+        if verbose:
+            console.print(f"[dim]API version: {client.api_version}[/dim]")
+
+        result = await run_application(
+            ApplicationRunRequest(
+                client=client,
+                app_name=app_lower,
+                config=app_config,
+                dry_run=dry_run,
+                verbose=verbose,
+                reporter=RichWorkflowReporter(app_style, verbose_enabled=verbose),
+                notification_sender=notification_sender,
+            )
+        )
+
+        if result.selected:
+            table = create_media_table(result.selected, app_name)
+            console.print(table)
+
+
+async def _run_cli(
+    applications: tuple[str, ...],
+    config_dict: dict[str, Any],
+    notifications: NotificationConfig | None,
+    *,
+    verbose: bool,
+    dry_run: bool,
+) -> None:
+    apps_str = ", ".join(applications)
+    console.print(f"[dim]{apps_str}[/dim]", justify="center")
+
+    for app in applications:
+        try:
+            await _process_cli_application(
+                app,
+                config_dict,
+                notifications,
+                verbose=verbose,
+                dry_run=dry_run,
+            )
+        except (StarrAPIError, ValidationError, ValueError) as e:
+            console.print(f"[red]Error: {app}: {e}[/red]")
+            if verbose:
+                console.print_exception()
+            raise click.Abort from e
+        except Exception as e:
+            logger.exception("Unexpected error processing %s", app)
+            console.print(f"[red]Error: {app}: unexpected error - {e}[/red]")
+            if verbose:
+                console.print_exception()
+            raise click.Abort from e
+
+    console.print()
 
 
 class RichWorkflowReporter(WorkflowReporter):
@@ -262,10 +392,7 @@ def main(
     """
     console.rule("[bold cyan]Upgradinatorr[/bold cyan]")
 
-    app_list = []
-    for app in applications:
-        app_list.extend([a.strip() for a in app.split(",")])
-    applications = tuple(app_list)
+    applications = _normalize_applications(applications)
 
     try:
         config_dict = parse_ini_config(config_file)
@@ -273,65 +400,18 @@ def main(
         console.print(f"[red]Error: failed to parse config: {e}[/red]")
         raise click.Abort from e
 
-    notifications = None
-    if "Notifications" in config_dict:
-        try:
-            notifications = NotificationConfig(**config_dict["Notifications"])
-        except (ValidationError, ValueError) as e:
-            console.print(f"[red]Error: invalid notification config: {e}[/red]")
-            raise click.Abort from e
-        except Exception as e:
-            logger.exception("Unexpected error parsing notification config")
-            console.print(f"[red]Error: notification config error: {e}[/red]")
-            raise click.Abort from e
-
-    async def run_all() -> None:
-        apps_str = ", ".join(applications)
-        console.print(f"[dim]{apps_str}[/dim]", justify="center")
-
-        for app in applications:
-            app_name = app.strip()
-            app_lower = app_name.lower()
-
-            try:
-                validate_application_name(app_lower)
-            except ValueError as e:
-                console.print(f"[red]Error: {e}[/red]")
-                raise click.Abort from e
-
-            app_config_key = None
-            for key in config_dict:
-                if key.lower() == app_lower:
-                    app_config_key = key
-                    break
-
-            if not app_config_key:
-                console.print(f"[red]Error: no config section for '{app}'[/red]")
-                raise click.Abort
-
-            try:
-                app_config = ApplicationConfig(
-                    **cast("dict[str, Any]", config_dict[app_config_key])
-                )
-                await process_application(
-                    app_name, app_config, notifications, dry_run=dry_run, verbose=verbose
-                )
-            except (StarrAPIError, ValidationError, ValueError) as e:
-                console.print(f"[red]Error: {app}: {e}[/red]")
-                if verbose:
-                    console.print_exception()
-                raise click.Abort from e
-            except Exception as e:
-                logger.exception("Unexpected error processing %s", app)
-                console.print(f"[red]Error: {app}: unexpected error - {e}[/red]")
-                if verbose:
-                    console.print_exception()
-                raise click.Abort from e
-
-        console.print()
+    notifications = _load_notifications(config_dict)
 
     try:
-        asyncio.run(run_all())
+        asyncio.run(
+            _run_cli(
+                applications,
+                config_dict,
+                notifications,
+                verbose=verbose,
+                dry_run=dry_run,
+            )
+        )
     except KeyboardInterrupt:
         console.print("\n[dim]interrupted[/dim]")
         raise click.Abort from None

@@ -6,7 +6,7 @@ import pytest
 
 from upgradinatorr.config import ApplicationConfig
 from upgradinatorr.constants import DRY_RUN_IGNORE_TAG_ID, DRY_RUN_TAG_ID
-from upgradinatorr.core import NullWorkflowReporter, run_application
+from upgradinatorr.core import ApplicationRunRequest, NullWorkflowReporter, run_application
 
 
 class FakeStarrClient:
@@ -75,11 +75,13 @@ async def test_run_application_uses_shared_dry_run_tag_constants() -> None:
     client = FakeStarrClient(media=[])
 
     result = await run_application(
-        client,
-        "radarr",
-        config,
-        dry_run=True,
-        reporter=NullWorkflowReporter(),
+        ApplicationRunRequest(
+            client=client,
+            app_name="radarr",
+            config=config,
+            dry_run=True,
+            reporter=NullWorkflowReporter(),
+        )
     )
 
     assert result.tag_id == DRY_RUN_TAG_ID
@@ -101,11 +103,13 @@ async def test_run_application_validates_tag_ids_in_dry_run() -> None:
 
     with pytest.raises(ValueError, match="cannot be the same"):
         await run_application(
-            client,
-            "radarr",
-            config,
-            dry_run=True,
-            reporter=NullWorkflowReporter(),
+            ApplicationRunRequest(
+                client=client,
+                app_name="radarr",
+                config=config,
+                dry_run=True,
+                reporter=NullWorkflowReporter(),
+            )
         )
 
 
@@ -130,11 +134,13 @@ async def test_run_application_notifies_when_no_media_in_attended_mode() -> None
         sent_messages.append((app_name, media_items, custom_message))
 
     await run_application(
-        client,
-        "radarr",
-        config,
-        reporter=NullWorkflowReporter(),
-        notification_sender=notification_sender,
+        ApplicationRunRequest(
+            client=client,
+            app_name="radarr",
+            config=config,
+            reporter=NullWorkflowReporter(),
+            notification_sender=notification_sender,
+        )
     )
 
     assert sent_messages == [("radarr", [], "No media left to search")]
