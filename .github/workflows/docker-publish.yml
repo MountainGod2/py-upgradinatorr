@@ -36,13 +36,13 @@ jobs:
           persist-credentials: false
 
       - name: Setup | Set up QEMU
-        uses: docker/setup-qemu-action@7d8b440d7549436e06a4f28937e7d2d1f7f1c5e5 # v3.6.0
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
 
       - name: Setup | Set up Docker Buildx
-        uses: docker/setup-buildx-action@4f1b27434d96943248a6f6b0fcd8246386c3f07e # v3.11.1
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Auth | Login to GHCR
-        uses: docker/login-action@3f9cf3281d69b26e5fd6f47b01a7eb1f997b0f2a # v3.8.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -50,14 +50,14 @@ jobs:
 
       - name: Auth | Login to Docker Hub (optional)
         if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
-        uses: docker/login-action@3f9cf3281d69b26e5fd6f47b01a7eb1f997b0f2a # v3.8.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ env.DOCKERHUB_TOKEN }}
 
       - name: Metadata | Generate image tags and labels
         id: meta
-        uses: docker/metadata-action@902fa8ec7f2b0f8ce9fde8b7f01f57f2b0430486 # v5.8.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
@@ -71,7 +71,7 @@ jobs:
 
       - name: Build | Build and push image
         id: build
-        uses: docker/build-push-action@5ce4c1f447cf5e5ee8f5e616b17f58dbfa0f06fd # v6.18.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: ./Dockerfile
