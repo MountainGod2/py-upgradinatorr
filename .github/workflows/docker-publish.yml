@@ -16,6 +16,8 @@ permissions:
 
 env:
   IMAGE_NAME: upgradinatorr
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
 jobs:
   publish:
@@ -47,11 +49,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Auth | Login to Docker Hub (optional)
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
         uses: docker/login-action@3f9cf3281d69b26e5fd6f47b01a7eb1f997b0f2a # v3.8.0
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
 
       - name: Metadata | Generate image tags and labels
         id: meta
@@ -59,7 +61,7 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
-            ${{ secrets.DOCKERHUB_USERNAME != '' && format('{0}/{1}', secrets.DOCKERHUB_USERNAME, env.IMAGE_NAME) || '' }}
+            ${{ env.DOCKERHUB_USERNAME != '' && format('{0}/{1}', env.DOCKERHUB_USERNAME, env.IMAGE_NAME) || '' }}
           tags: |
             type=ref,event=branch
             type=ref,event=tag
