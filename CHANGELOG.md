@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.3.2 (2026-09-08)
+
+### Bug Fixes
+
+- Add image tag format for Docker metadata generation
+  ([`06c7236`](https://github.com/MountainGod2/py-upgradinatorr/commit/06c72365c1c6ad726a671990f7d3e7faa8a3de4d))
+
+
 ## v0.3.1 (2026-09-08)
 
 ### Bug Fixes
