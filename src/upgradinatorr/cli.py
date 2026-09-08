@@ -307,11 +307,13 @@ async def process_application(
                 custom_message: str | None = None,
             ) -> None:
                 await send_completion_notification(
-                    notif_app_name,
-                    media_items,
-                    notifications,
-                    custom_message,
-                    warning_handler=lambda message: console.print(f"[yellow]  {message}[/yellow]"),
+                    CompletionNotificationRequest(
+                        app_name=notif_app_name,
+                        media_items=media_items,
+                        notifications=notifications,
+                        custom_message=custom_message,
+                        warning_handler=lambda message: console.print(f"[yellow]  {message}[/yellow]"),
+                    )
                 )
 
             notification_sender = configured_notification_sender
@@ -321,13 +323,15 @@ async def process_application(
                 console.print(f"[dim]API version: {client.api_version}[/dim]")
 
             result = await run_application(
-                client,
-                app_name,
-                config,
-                dry_run=dry_run,
-                verbose=verbose,
-                reporter=RichWorkflowReporter(app_style, verbose_enabled=verbose),
-                notification_sender=notification_sender,
+                ApplicationRunRequest(
+                    client=client,
+                    app_name=app_name,
+                    config=config,
+                    dry_run=dry_run,
+                    verbose=verbose,
+                    reporter=RichWorkflowReporter(app_style, verbose_enabled=verbose),
+                    notification_sender=notification_sender,
+                )
             )
 
             if result.selected:

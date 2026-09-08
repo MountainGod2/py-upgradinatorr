@@ -324,9 +324,7 @@ class UpgradinatorTUI(App[None]):
 
     def _resolve_app_config(self, app_name: str) -> tuple[str | None, ApplicationConfig | None]:
         app_lower = app_name.lower()
-        app_config_key = next(
-            (key for key in self.config_dict if key.lower() == app_lower), None
-        )
+        app_config_key = next((key for key in self.config_dict if key.lower() == app_lower), None)
         if not app_config_key:
             return None, None
 

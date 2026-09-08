@@ -215,11 +215,7 @@ async def _handle_unattended_mode(
     if request.workflow.dry_run:
         request.reporter.warning(f"would remove tag from {len(media_ids)} items")
         for item in request.all_media:
-            if (
-                item.get("id") in media_ids
-                and "tags" in item
-                and request.tag_id in item["tags"]
-            ):
+            if item.get("id") in media_ids and "tags" in item and request.tag_id in item["tags"]:
                 item["tags"].remove(request.tag_id)
         updated_media = request.all_media
     else:
