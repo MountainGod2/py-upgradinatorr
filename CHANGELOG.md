@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.3.0 (2026-09-08)
+
+### Features
+
+- **docker**: Add workflow for building and publishing
+  ([`4e1e268`](https://github.com/MountainGod2/py-upgradinatorr/commit/4e1e268f2a33f31dfa4f08bf7239fc3500a0314d))
+
+
 ## v0.2.3 (2026-09-07)
 
 ### Bug Fixes
