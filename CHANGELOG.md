@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.3.1 (2026-09-08)
+
+### Bug Fixes
+
+- **docker**: Update environment variable usage for Docker Hub authentication
+  ([`d6dc531`](https://github.com/MountainGod2/py-upgradinatorr/commit/d6dc53136c8d07b2caeb727edeebb20490961968))
+
+
 ## v0.3.0 (2026-09-08)
 
 ### Features
