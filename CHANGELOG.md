@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.3.4 (2026-09-09)
+
+### Bug Fixes
+
+- **ci**: Consolidate Docker publish workflow into main CD pipeline
+  ([`6c6b6e0`](https://github.com/MountainGod2/py-upgradinatorr/commit/6c6b6e0aa806fa08fc2ea2601f0d2ccd94411fbf))
+
+
 ## v0.3.3 (2026-09-08)
 
 ### Bug Fixes
