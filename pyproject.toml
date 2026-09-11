@@ -26,7 +26,7 @@ dev = [
     "pytest-cov==7.1.0",
     "ruff==0.16.7",
 ]
-build = ["python-semantic-release==10.6.2", "uv==0.12.12"]
+build = ["python-semantic-release==10.6.2", "uv==0.12.13"]
 
 [project.scripts]
 upgradinatorr = "upgradinatorr.cli:main"
