@@ -28,8 +28,7 @@ DISCORD_WEBHOOK = (
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_abcd"
 )
 NOTIFIARR_WEBHOOK = (
-    "https://notifiarr.com/api/v1/notification/passthrough/"
-    "12345678-1234-1234-1234-123456789abc"
+    "https://notifiarr.com/api/v1/notification/passthrough/12345678-1234-1234-1234-123456789abc"
 )
 
 
