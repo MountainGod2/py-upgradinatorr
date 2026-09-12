@@ -218,7 +218,8 @@ def parse_ini_config(config_path: Path) -> dict[str, dict[str, str]]:
     When both are defined, General section values take precedence.
     """
     config = CaseSensitiveConfigParser()
-    config.read(config_path)
+    with config_path.open("r", encoding="utf-8") as config_file:
+        config.read_file(config_file)
 
     config_dict: dict[str, dict[str, str]] = {s: dict(config.items(s)) for s in config.sections()}
 

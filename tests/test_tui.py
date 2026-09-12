@@ -6,17 +6,26 @@ from pathlib import Path
 import pytest
 from textual.widgets import Checkbox, Log
 
+from upgradinatorr.config import parse_ini_config
 from upgradinatorr.tui import UpgradinatorTUI
 
 
 @pytest.mark.asyncio
 async def test_tui_shows_error_when_config_missing(tmp_path: Path) -> None:
-    """Missing config path currently results in an empty loaded config state."""
-    app = UpgradinatorTUI(tmp_path / "missing.conf")
+    """Missing config path should raise and then log the file-not-found error."""
+    missing_path = tmp_path / "missing.conf"
+
+    with pytest.raises(FileNotFoundError):
+        parse_ini_config(missing_path)
+
+    app = UpgradinatorTUI(missing_path)
 
     async with app.run_test() as _pilot:
         log_lines = app.query_one("#log-display", Log).lines
-        assert any("config loaded: 0 apps found" in line.lower() for line in log_lines)
+        assert any(
+            "config file not found" in line.lower() or "error: config not found" in line.lower()
+            for line in log_lines
+        )
 
 
 @pytest.mark.asyncio
