@@ -65,7 +65,7 @@ def test_notification_config_rejects_channel_id_format() -> None:
 
 
 def test_parse_ini_config_merges_general_to_notifications(
-    write_ini: Callable[[str, str], Path],
+    write_ini: Callable[[str], Path],
 ) -> None:
     """General section webhook values should merge into Notifications."""
     config_file = write_ini(

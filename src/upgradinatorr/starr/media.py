@@ -88,12 +88,12 @@ class MediaFilter:
         if self.status:
             filtered = [item for item in filtered if item.get("status") == self.status]
 
-        if self.quality_profile_id:
+        if self.quality_profile_id is not None:
             filtered = [
                 item for item in filtered if item.get("qualityProfileId") == self.quality_profile_id
             ]
 
-        if self.ignore_tag_id:
+        if self.ignore_tag_id is not None:
             filtered = [item for item in filtered if self.ignore_tag_id not in item.get("tags", [])]
 
         return filtered

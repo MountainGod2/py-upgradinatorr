@@ -1,0 +1,78 @@
+"""Smoke tests for Textual TUI entrypoint behavior."""
+
+from collections.abc import Callable
+from pathlib import Path
+
+import pytest
+from textual.widgets import Checkbox, Log
+
+from upgradinatorr.config import parse_ini_config
+from upgradinatorr.tui import UpgradinatorTUI
+
+
+@pytest.mark.asyncio
+async def test_tui_shows_error_when_config_missing(tmp_path: Path) -> None:
+    """Missing config path should raise and then log the file-not-found error."""
+    missing_path = tmp_path / "missing.conf"
+
+    with pytest.raises(FileNotFoundError):
+        parse_ini_config(missing_path)
+
+    app = UpgradinatorTUI(missing_path)
+
+    async with app.run_test() as _pilot:
+        log_lines = app.query_one("#log-display", Log).lines
+        assert any(
+            "config file not found" in line.lower() or "error: config not found" in line.lower()
+            for line in log_lines
+        )
+
+
+@pytest.mark.asyncio
+async def test_tui_start_with_no_selected_apps_logs_warning(
+    write_ini: Callable[[str], Path],
+) -> None:
+    """Starting with all app checkboxes off should log a warning."""
+    config_path = write_ini(
+        """
+[Radarr]
+ApiKey=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+Url=http://localhost:7878
+Count=1
+TagName=upgrade
+        """,
+    )
+    app = UpgradinatorTUI(config_path)
+
+    async with app.run_test() as pilot:
+        for checkbox in app.query(Checkbox):
+            if checkbox.id and checkbox.id.startswith("chk_"):
+                checkbox.value = False
+
+        app.action_start()
+        await pilot.pause()
+
+        log_lines = app.query_one("#log-display", Log).lines
+        assert any("no applications selected" in line.lower() for line in log_lines)
+
+
+@pytest.mark.asyncio
+async def test_tui_refresh_button_triggers_reload(write_ini: Callable[[str], Path]) -> None:
+    """Refresh button should keep the app responsive and update status."""
+    config_path = write_ini(
+        """
+[Radarr]
+ApiKey=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+Url=http://localhost:7878
+Count=1
+TagName=upgrade
+        """,
+    )
+    app = UpgradinatorTUI(config_path)
+
+    async with app.run_test() as pilot:
+        app.action_refresh()
+        await pilot.pause()
+
+        log_lines = app.query_one("#log-display", Log).lines
+        assert any("config loaded" in line.lower() for line in log_lines)

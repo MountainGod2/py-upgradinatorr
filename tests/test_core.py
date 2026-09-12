@@ -38,8 +38,9 @@ class FakeStarrClient:
         self._tags[tag_name] = new_id
         return new_id
 
-    async def get_quality_profile_id(self, _profile_name: str) -> int:
+    async def get_quality_profile_id(self, profile_name: str) -> int:
         """Return a fixed quality profile ID for tests."""
+        del profile_name
         return 99
 
     async def get_all_media(self) -> list[dict[str, Any]]:
@@ -57,8 +58,9 @@ class FakeStarrClient:
         """Capture search payload for assertions."""
         self.search_called_with = media_items
 
-    async def add_tags_to_media(self, media_ids: list[int], _tag_id: int) -> None:
+    async def add_tags_to_media(self, media_ids: list[int], tag_id: int) -> None:
         """Capture tagged IDs for assertions."""
+        del tag_id
         self.tagged_ids = media_ids
 
 
@@ -130,8 +132,9 @@ async def test_run_application_notifies_when_no_media_in_attended_mode() -> None
         app_name: str,
         media_items: list[dict[str, Any]],
         custom_message: str | None = None,
-    ) -> None:
+    ) -> bool:
         sent_messages.append((app_name, media_items, custom_message))
+        return True
 
     await run_application(
         ApplicationRunRequest(
@@ -144,3 +147,52 @@ async def test_run_application_notifies_when_no_media_in_attended_mode() -> None
     )
 
     assert sent_messages == [("radarr", [], "No media left to search")]
+
+
+@pytest.mark.asyncio
+async def test_run_application_warns_when_no_media_notification_fails() -> None:
+    """The no-media path should warn when the sender reports a failed notification."""
+    config = ApplicationConfig(
+        ApiKey="a" * 32,
+        Url="http://localhost:7878",
+        Count=1,
+        TagName="upgrade",
+    )
+    client = FakeStarrClient(media=[])
+    warnings: list[str] = []
+
+    class RecordingReporter:
+        def status(self, message: str) -> None:
+            del message
+
+        def info(self, message: str) -> None:
+            del message
+
+        def warning(self, message: str) -> None:
+            warnings.append(message)
+
+        def success(self, message: str) -> None:
+            del message
+
+        def verbose(self, message: str) -> None:
+            del message
+
+    async def notification_sender(
+        app_name: str,
+        media_items: list[dict[str, Any]],
+        custom_message: str | None = None,
+    ) -> bool:
+        del app_name, media_items, custom_message
+        return False
+
+    await run_application(
+        ApplicationRunRequest(
+            client=client,
+            app_name="radarr",
+            config=config,
+            reporter=RecordingReporter(),
+            notification_sender=notification_sender,
+        )
+    )
+
+    assert warnings == ["notification failed"]

@@ -23,14 +23,12 @@ from upgradinatorr.constants import (
 )
 from upgradinatorr.core import (
     ApplicationRunRequest,
-    NotificationSender,
     WorkflowReporter,
     run_application,
 )
 from upgradinatorr.media_display import build_media_display_row
 from upgradinatorr.notifications.completion import (
-    CompletionNotificationRequest,
-    send_completion_notification,
+    make_notification_sender,
 )
 from upgradinatorr.starr.client import StarrAPIError, StarrClient
 
@@ -164,25 +162,10 @@ async def _process_cli_application(
     app_config = ApplicationConfig(**cast("dict[str, Any]", config_dict[app_config_key]))
     app_style = get_app_style(app_name)
 
-    notification_sender: NotificationSender | None = None
-    if notifications:
-
-        async def configured_notification_sender(
-            notif_app_name: str,
-            media_items: list[dict[str, Any]],
-            custom_message: str | None = None,
-        ) -> None:
-            await send_completion_notification(
-                CompletionNotificationRequest(
-                    app_name=notif_app_name,
-                    media_items=media_items,
-                    notifications=notifications,
-                    custom_message=custom_message,
-                    warning_handler=lambda message: console.print(f"[yellow]  {message}[/yellow]"),
-                )
-            )
-
-        notification_sender = configured_notification_sender
+    notification_sender = make_notification_sender(
+        notifications,
+        warning_handler=lambda message: console.print(f"[yellow]  {message}[/yellow]"),
+    )
 
     async with StarrClient(app_lower, app_config.url, app_config.api_key) as client:
         if verbose:
@@ -268,82 +251,6 @@ class RichWorkflowReporter(WorkflowReporter):
         """Render a verbose workflow message when enabled."""
         if self.verbose_enabled:
             console.print(f"[dim]{message}[/dim]")
-
-
-async def process_application(
-    app_name: str,
-    config: ApplicationConfig,
-    notifications: NotificationConfig | None = None,
-    *,
-    dry_run: bool = False,
-    verbose: bool = False,
-) -> None:
-    """Process a single Starr application."""
-    app_name = app_name.lower()
-    app_style = get_app_style(app_name)
-
-    console.print()
-    console.rule(f"[{app_style}]{app_name.title()}[/{app_style}]")
-
-    meta_parts = [
-        f"[dim]{config.url}[/dim]",
-        f"count=[dim]'{config.count}'[/dim]",
-        f"tag=[dim]'{config.tag_name}'[/dim]",
-    ]
-    if config.ignore_tag:
-        meta_parts.append(f"ignore=[dim]'{config.ignore_tag}'[/dim]")
-    if dry_run:
-        meta_parts.append("[yellow]dry-run[/yellow]")
-
-    console.print(" · ".join(meta_parts))
-
-    try:
-        notification_sender: NotificationSender | None = None
-        if notifications:
-
-            async def configured_notification_sender(
-                notif_app_name: str,
-                media_items: list[dict[str, Any]],
-                custom_message: str | None = None,
-            ) -> None:
-                await send_completion_notification(
-                    CompletionNotificationRequest(
-                        app_name=notif_app_name,
-                        media_items=media_items,
-                        notifications=notifications,
-                        custom_message=custom_message,
-                        warning_handler=lambda message: console.print(
-                            f"[yellow]  {message}[/yellow]"
-                        ),
-                    )
-                )
-
-            notification_sender = configured_notification_sender
-
-        async with StarrClient(app_name, config.url, config.api_key) as client:
-            if verbose:
-                console.print(f"[dim]API version: {client.api_version}[/dim]")
-
-            result = await run_application(
-                ApplicationRunRequest(
-                    client=client,
-                    app_name=app_name,
-                    config=config,
-                    dry_run=dry_run,
-                    verbose=verbose,
-                    reporter=RichWorkflowReporter(app_style, verbose_enabled=verbose),
-                    notification_sender=notification_sender,
-                )
-            )
-
-            if result.selected:
-                table = create_media_table(result.selected, app_name)
-                console.print(table)
-    except StarrAPIError:
-        raise
-    except Exception:
-        logger.exception("Unexpected error processing %s", app_name)
-        raise
 
 
 @click.command()

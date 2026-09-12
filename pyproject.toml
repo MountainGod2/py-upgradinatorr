@@ -1,3 +1,7 @@
+[build-system]
+requires = ["uv_build==0.12.13"]
+build-backend = "uv_build"
+
 [project]
 name = "upgradinatorr"
 version = "0.3.4"
@@ -13,18 +17,18 @@ dependencies = [
     "rich-click==1.9.9",
     "stamina==26.1.0",
     "textual==8.2.8",
-    "textual-dev==1.8.0",
 ]
 
 [dependency-groups]
 dev = [
     "aioresponses-ng==0.8.2",
-    "mypy==2.3.1",
+    "pyrefly==1.3.0",
     "pre-commit==4.6.2",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
     "ruff==0.16.7",
+    "textual-dev==1.8.0",
 ]
 build = ["python-semantic-release==10.6.2", "uv==0.12.13"]
 
@@ -32,14 +36,8 @@ build = ["python-semantic-release==10.6.2", "uv==0.12.13"]
 upgradinatorr = "upgradinatorr.cli:main"
 upgradinatorr-tui = "upgradinatorr.tui:run_tui"
 
-[build-system]
-requires = ["uv_build==0.12.13"]
-build-backend = "uv_build"
-
 [tool.uv]
-constraint-dependencies = [
-    "gitpython<=3.1.59"
-]
+constraint-dependencies = ["gitpython<=3.1.59"]
 
 [tool.semantic_release]
 build_command = """
@@ -77,10 +75,21 @@ format.line-ending = "lf"
 format.docstring-code-format = true
 format.docstring-code-line-length = "dynamic"
 
-[tool.mypy]
-packages = "upgradinatorr"
-python_version = "3.12"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-strict = true
+[tool.pytest]
+ini_options.pythonpath = ["src"]
+ini_options.testpaths = ["tests"]
+ini_options.asyncio_mode = "strict"
+
+[tool.pyrefly]
+project-includes = ["src"]
+python-version = "3.12.0"
+preset = "legacy"
+check-unannotated-defs = true
+infer-return-types = "never"
+
+[tool.pyrefly.errors]
+implicit-any-parameter = "error"
+no-any-return = "error"
+unannotated-return = "error"
+implicit-any = "error"
+redundant-cast = "warn"

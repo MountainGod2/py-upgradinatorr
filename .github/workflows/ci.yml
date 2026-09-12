@@ -33,8 +33,8 @@ jobs:
       - name: Lint | Run Ruff format check
         run: uv run ruff format --check .
 
-  mypy:
-    name: Mypy (type check)
+  pyrefly:
+    name: Pyrefly (type check)
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout Repository
@@ -50,8 +50,8 @@ jobs:
       - name: Setup | Install Python & Project dependencies
         run: uv sync --group dev
 
-      - name: Lint | Run mypy
-        run: uv run mypy
+      - name: Type Check | Run Pyrefly check
+        run: uv run pyrefly check .
 
   test:
     name: Test (py${{ matrix.python-version }})
@@ -59,7 +59,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.12", "3.13", "3.14"]
     steps:
       - name: Setup | Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -76,7 +76,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Test | Run pytest
-        run: uv run pytest --cov=upgradinatorr --cov-report=xml --cov-report=term
+        run: uv run pytest --cov=upgradinatorr --cov-report=xml --cov-report=term --cov-fail-under=30
 
       - name: Test | Upload coverage report
         if: ${{ matrix.python-version == '3.12' }}

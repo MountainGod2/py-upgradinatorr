@@ -1,10 +1,17 @@
 """Unit tests for notification sending."""
 
 from http import HTTPStatus
+from unittest.mock import AsyncMock
 
 import pytest
 from aioresponses import aioresponses
 
+from upgradinatorr.config import NotificationConfig
+from upgradinatorr.notifications.completion import (
+    CompletionNotificationRequest,
+    make_notification_sender,
+    send_completion_notification,
+)
 from upgradinatorr.notifications.discord import (
     DiscordNotificationError,
     DiscordNotificationRequest,
@@ -14,6 +21,14 @@ from upgradinatorr.notifications.notifiarr import (
     NotifiarrNotificationError,
     NotifiarrNotificationRequest,
     send_notifiarr_notification,
+)
+
+DISCORD_WEBHOOK = (
+    "https://discord.com/api/webhooks/123456789012345678/"
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_abcd"
+)
+NOTIFIARR_WEBHOOK = (
+    "https://notifiarr.com/api/v1/notification/passthrough/12345678-1234-1234-1234-123456789abc"
 )
 
 
@@ -37,6 +52,59 @@ async def test_send_discord_notification_raises_for_non_2xx(
                 color=123,
             )
         )
+
+
+@pytest.mark.asyncio
+async def test_send_completion_notification_handles_notifiarr_errors_best_effort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Notifiarr errors should be reported as warnings and not re-raised."""
+    warnings: list[str] = []
+
+    mock_discord = AsyncMock(return_value=None)
+    mock_notifiarr = AsyncMock(side_effect=NotifiarrNotificationError("boom"))
+    monkeypatch.setattr(
+        "upgradinatorr.notifications.completion.send_discord_notification",
+        mock_discord,
+    )
+    monkeypatch.setattr(
+        "upgradinatorr.notifications.completion.send_notifiarr_notification",
+        mock_notifiarr,
+    )
+
+    sent = await send_completion_notification(
+        CompletionNotificationRequest(
+            app_name="radarr",
+            media_items=[{"title": "Movie"}],
+            notifications=NotificationConfig(
+                DiscordWebhook=DISCORD_WEBHOOK,
+                NotifiarrPassthroughWebhook=NOTIFIARR_WEBHOOK,
+                NotifiarrPassthroughDiscordChannelId="12345678901234567",
+            ),
+            warning_handler=warnings.append,
+        )
+    )
+
+    assert sent
+    assert warnings == ["notifiarr: boom"]
+
+
+@pytest.mark.asyncio
+async def test_make_notification_sender_returns_none_when_all_channels_disabled() -> None:
+    """Factory should return no sender if no channels are enabled."""
+    notifications = NotificationConfig(
+        DiscordWebhook=DISCORD_WEBHOOK,
+        NotifiarrPassthroughWebhook=NOTIFIARR_WEBHOOK,
+        NotifiarrPassthroughDiscordChannelId="12345678901234567",
+    )
+
+    sender = make_notification_sender(
+        notifications,
+        enable_discord=False,
+        enable_notifiarr=False,
+    )
+
+    assert sender is None
 
 
 @pytest.mark.asyncio

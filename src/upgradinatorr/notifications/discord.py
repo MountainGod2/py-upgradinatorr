@@ -23,7 +23,7 @@ class DiscordNotificationRequest:
     color: int
     thumbnail_url: str | None = None
     username: str = "Upgradinatorr"
-    avatar_url: str = "https://gh.notifiarr.com/images/icons/powershell.png"
+    avatar_url: str = "https://www.python.org/static/community_logos/python-logo.png"
 
 
 async def send_discord_notification(request: DiscordNotificationRequest) -> None:

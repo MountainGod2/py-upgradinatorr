@@ -218,14 +218,15 @@ def parse_ini_config(config_path: Path) -> dict[str, dict[str, str]]:
     When both are defined, General section values take precedence.
     """
     config = CaseSensitiveConfigParser()
-    config.read(config_path)
+    with config_path.open("r", encoding="utf-8") as config_file:
+        config.read_file(config_file)
 
-    config_dict = {s: dict(config.items(s)) for s in config.sections()}
+    config_dict: dict[str, dict[str, str]] = {s: dict(config.items(s)) for s in config.sections()}
 
     # General section takes precedence if both are defined
     if "General" in config_dict:
         if "Notifications" not in config_dict:
-            config_dict["Notifications"] = {}
+            config_dict["Notifications"] = dict[str, str]()
 
         for key in [
             "DiscordWebhook",
