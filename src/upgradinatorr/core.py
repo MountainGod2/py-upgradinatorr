@@ -327,7 +327,13 @@ async def run_application(request: ApplicationRunRequest) -> ApplicationRunResul
         else:
             active_reporter.info(f"No {request.app_name} media matched; skipping")
             if request.notification_sender:
-                await request.notification_sender(request.app_name, [], "No media left to search")
+                notification_sent = await request.notification_sender(
+                    request.app_name,
+                    [],
+                    "No media left to search",
+                )
+                if not notification_sent:
+                    active_reporter.warning("notification failed")
             return ApplicationRunResult(
                 app_name=request.app_name,
                 app_type=app_type,

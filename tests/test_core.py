@@ -147,3 +147,52 @@ async def test_run_application_notifies_when_no_media_in_attended_mode() -> None
     )
 
     assert sent_messages == [("radarr", [], "No media left to search")]
+
+
+@pytest.mark.asyncio
+async def test_run_application_warns_when_no_media_notification_fails() -> None:
+    """The no-media path should warn when the sender reports a failed notification."""
+    config = ApplicationConfig(
+        ApiKey="a" * 32,
+        Url="http://localhost:7878",
+        Count=1,
+        TagName="upgrade",
+    )
+    client = FakeStarrClient(media=[])
+    warnings: list[str] = []
+
+    class RecordingReporter:
+        def status(self, message: str) -> None:
+            del message
+
+        def info(self, message: str) -> None:
+            del message
+
+        def warning(self, message: str) -> None:
+            warnings.append(message)
+
+        def success(self, message: str) -> None:
+            del message
+
+        def verbose(self, message: str) -> None:
+            del message
+
+    async def notification_sender(
+        app_name: str,
+        media_items: list[dict[str, Any]],
+        custom_message: str | None = None,
+    ) -> bool:
+        del app_name, media_items, custom_message
+        return False
+
+    await run_application(
+        ApplicationRunRequest(
+            client=client,
+            app_name="radarr",
+            config=config,
+            reporter=RecordingReporter(),
+            notification_sender=notification_sender,
+        )
+    )
+
+    assert warnings == ["notification failed"]
