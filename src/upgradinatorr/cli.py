@@ -23,7 +23,6 @@ from upgradinatorr.constants import (
 )
 from upgradinatorr.core import (
     ApplicationRunRequest,
-    NotificationSender,
     WorkflowReporter,
     run_application,
 )
