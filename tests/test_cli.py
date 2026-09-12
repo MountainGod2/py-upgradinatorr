@@ -1,7 +1,7 @@
 """Smoke tests for CLI entrypoint behavior."""
 
-from pathlib import Path
-from typing import Any
+from types import TracebackType
+from typing import Any, Self
 
 from click.testing import CliRunner
 
@@ -13,17 +13,20 @@ class FakeStarrClient:
     """Minimal async context manager used by CLI smoke tests."""
 
     def __init__(self, _app_name: str, _url: str, _api_key: str) -> None:
+        """Initialize the fake client used by CLI smoke tests."""
         self.api_version = "v3"
 
-    async def __aenter__(self) -> "FakeStarrClient":
+    async def __aenter__(self) -> Self:
+        """Enter the async context and return the client instance."""
         return self
 
     async def __aexit__(
         self,
         _exc_type: type[BaseException] | None,
         _exc: BaseException | None,
-        _tb: Any,
+        _tb: TracebackType | None,
     ) -> None:
+        """Exit the async context without raising any test-specific errors."""
         return
 
 
