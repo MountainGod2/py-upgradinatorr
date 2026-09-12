@@ -6,7 +6,7 @@ from typing import Any, Protocol
 
 from upgradinatorr.config import ApplicationConfig, get_application_type
 from upgradinatorr.constants import DRY_RUN_IGNORE_TAG_ID, DRY_RUN_TAG_ID, STATUS_FIELDS
-from upgradinatorr.starr.client import StarrClient
+from upgradinatorr.starr.client import StarrClientProtocol
 from upgradinatorr.starr.media import MediaFilter, select_random_media
 
 
@@ -31,7 +31,7 @@ class WorkflowReporter(Protocol):
 
 NotificationSender = Callable[
     [str, list[dict[str, Any]], str | None],
-    Awaitable[None],
+    Awaitable[bool],
 ]
 
 
@@ -39,7 +39,7 @@ NotificationSender = Callable[
 class ApplicationRunRequest:
     """Inputs required to run the shared application workflow."""
 
-    client: StarrClient
+    client: StarrClientProtocol
     app_name: str
     config: ApplicationConfig
     count: int | str | None = None
@@ -108,7 +108,7 @@ def validate_tag_ids(tag_name: str, tag_id: int, ignore_tag: str, ignore_tag_id:
 
 
 async def _setup_tags(
-    client: StarrClient,
+    client: StarrClientProtocol,
     config: ApplicationConfig,
     reporter: WorkflowReporter,
     *,
@@ -152,7 +152,7 @@ async def _setup_tags(
 
 
 async def _setup_quality_profile(
-    client: StarrClient,
+    client: StarrClientProtocol,
     config: ApplicationConfig,
     reporter: WorkflowReporter,
     *,
@@ -249,8 +249,11 @@ async def _process_selected_media(
 
     if request.notification_sender:
         reporter.status("Notifying...")
-        await request.notification_sender(request.app_name, selected, None)
-        reporter.success("notification sent")
+        notification_sent = await request.notification_sender(request.app_name, selected, None)
+        if notification_sent:
+            reporter.success("notification sent")
+        else:
+            reporter.warning("notification failed")
 
 
 async def run_application(request: ApplicationRunRequest) -> ApplicationRunResult:

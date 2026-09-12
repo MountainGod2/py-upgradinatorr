@@ -130,8 +130,9 @@ async def test_run_application_notifies_when_no_media_in_attended_mode() -> None
         app_name: str,
         media_items: list[dict[str, Any]],
         custom_message: str | None = None,
-    ) -> None:
+    ) -> bool:
         sent_messages.append((app_name, media_items, custom_message))
+        return True
 
     await run_application(
         ApplicationRunRequest(

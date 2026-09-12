@@ -1,6 +1,5 @@
 """Shared pytest configuration for test discovery."""
 
-import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Protocol
@@ -8,12 +7,6 @@ from typing import Protocol
 import pytest
 import stamina
 from aioresponses import aioresponses
-
-# Ensure local src/ package imports work without installing the project.
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_PATH = PROJECT_ROOT / "src"
-if str(SRC_PATH) not in sys.path:
-    sys.path.insert(0, str(SRC_PATH))
 
 
 class WriteIni(Protocol):

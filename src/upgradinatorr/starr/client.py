@@ -4,7 +4,7 @@ import asyncio
 import logging
 from http import HTTPStatus
 from types import TracebackType
-from typing import Any, ClassVar, Self, cast
+from typing import Any, ClassVar, Protocol, Self, cast
 
 import aiohttp
 import stamina
@@ -49,6 +49,31 @@ class StarrAPIError(Exception):
         self.message = message
         self.application = application
         super().__init__(f"{application} responded with {status}: {message}")
+
+
+class StarrClientProtocol(Protocol):
+    """Protocol for Starr client operations used by the shared workflow."""
+
+    async def get_tag(self, tag_name: str) -> dict[str, Any] | None:
+        """Get tag by name."""
+
+    async def get_or_create_tag(self, tag_name: str) -> int:
+        """Get existing tag ID or create a new tag."""
+
+    async def get_quality_profile_id(self, profile_name: str) -> int:
+        """Resolve a quality profile by name."""
+
+    async def get_all_media(self) -> list[dict[str, Any]]:
+        """Fetch all media items."""
+
+    async def remove_tags_from_media(self, media_ids: list[int], tag_id: int) -> None:
+        """Remove a tag from media items."""
+
+    async def search_media_batch(self, media_items: list[dict[str, Any]]) -> None:
+        """Queue search commands for media items."""
+
+    async def add_tags_to_media(self, media_ids: list[int], tag_id: int) -> None:
+        """Add a tag to media items."""
 
 
 class StarrClient:

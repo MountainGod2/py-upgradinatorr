@@ -100,3 +100,42 @@ def test_filter_attended_applies_all_constraints() -> None:
     filtered = media_filter.filter_attended(media_items)
 
     assert [item["id"] for item in filtered] == [1]
+
+
+def test_filter_attended_treats_zero_ids_as_valid_filters() -> None:
+    """Zero-valued IDs should be applied when explicitly configured."""
+    media_items = [
+        {
+            "id": 1,
+            "monitored": True,
+            "tags": [],
+            "status": "released",
+            "qualityProfileId": 0,
+        },
+        {
+            "id": 2,
+            "monitored": True,
+            "tags": [0],
+            "status": "released",
+            "qualityProfileId": 0,
+        },
+        {
+            "id": 3,
+            "monitored": True,
+            "tags": [],
+            "status": "released",
+            "qualityProfileId": 10,
+        },
+    ]
+
+    media_filter = MediaFilter(
+        monitored=True,
+        tag_id=5,
+        status="released",
+        quality_profile_id=0,
+        ignore_tag_id=0,
+    )
+
+    filtered = media_filter.filter_attended(media_items)
+
+    assert [item["id"] for item in filtered] == [1]

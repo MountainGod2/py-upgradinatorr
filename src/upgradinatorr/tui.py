@@ -34,8 +34,7 @@ from upgradinatorr.core import (
 )
 from upgradinatorr.media_display import build_media_display_row
 from upgradinatorr.notifications.completion import (
-    CompletionNotificationRequest,
-    send_completion_notification,
+    make_notification_sender,
 )
 from upgradinatorr.starr.client import StarrAPIError, StarrClient
 
@@ -342,43 +341,23 @@ class UpgradinatorTUI(App[None]):
         log_widget: Log,
         notifications: NotificationConfig | None,
     ) -> NotificationSender | None:
-        if notifications is None:
-            if self.verbose:
-                log_widget.write_line("Detail: no notification methods configured; skipping send")
-            return None
-
-        send_discord = self.notify_discord_enabled and bool(notifications.discord_webhook)
-        send_notifiarr = self.notify_notifiarr_enabled and bool(
-            notifications.notifiarr_webhook and notifications.notifiarr_channel_id,
-        )
-
         def log_notification_warning(message: str) -> None:
             """Write notification warnings to the TUI log."""
             log_widget.write_line(f"Warning: {message}")
 
-        if not send_discord and not send_notifiarr:
+        notification_sender = make_notification_sender(
+            notifications,
+            warning_handler=log_notification_warning,
+            enable_discord=self.notify_discord_enabled,
+            enable_notifiarr=self.notify_notifiarr_enabled,
+        )
+
+        if notification_sender is None:
             if self.verbose:
-                log_widget.write_line("Detail: notifications disabled; no methods are active")
+                log_widget.write_line("Detail: notifications disabled or not configured")
             return None
 
-        async def configured_notification_sender(
-            notif_app_name: str,
-            media_items: list[dict[str, Any]],
-            custom_message: str | None = None,
-        ) -> None:
-            await send_completion_notification(
-                CompletionNotificationRequest(
-                    app_name=notif_app_name,
-                    media_items=media_items,
-                    notifications=notifications,
-                    custom_message=custom_message,
-                    warning_handler=log_notification_warning,
-                    enable_discord=send_discord,
-                    enable_notifiarr=send_notifiarr,
-                )
-            )
-
-        return configured_notification_sender
+        return notification_sender
 
     async def load_config(self) -> None:
         """Load configuration from file."""
