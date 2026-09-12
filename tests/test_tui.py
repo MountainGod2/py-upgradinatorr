@@ -1,9 +1,10 @@
 """Smoke tests for Textual TUI entrypoint behavior."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from textual.widgets import Log
+from textual.widgets import Checkbox, Log
 
 from upgradinatorr.tui import UpgradinatorTUI
 
@@ -19,7 +20,9 @@ async def test_tui_shows_error_when_config_missing(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_tui_start_with_no_selected_apps_logs_warning(write_ini: object) -> None:
+async def test_tui_start_with_no_selected_apps_logs_warning(
+    write_ini: Callable[[str], Path],
+) -> None:
     """Starting with all app checkboxes off should log a warning."""
     config_path = write_ini(
         """
@@ -33,7 +36,7 @@ TagName=upgrade
     app = UpgradinatorTUI(config_path)
 
     async with app.run_test() as pilot:
-        for checkbox in app.query("Checkbox"):
+        for checkbox in app.query(Checkbox):
             if checkbox.id and checkbox.id.startswith("chk_"):
                 checkbox.value = False
 
@@ -45,7 +48,7 @@ TagName=upgrade
 
 
 @pytest.mark.asyncio
-async def test_tui_refresh_button_triggers_reload(write_ini: object) -> None:
+async def test_tui_refresh_button_triggers_reload(write_ini: Callable[[str], Path]) -> None:
     """Refresh button should keep the app responsive and update status."""
     config_path = write_ini(
         """

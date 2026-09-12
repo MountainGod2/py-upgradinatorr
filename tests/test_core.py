@@ -38,8 +38,9 @@ class FakeStarrClient:
         self._tags[tag_name] = new_id
         return new_id
 
-    async def get_quality_profile_id(self, _profile_name: str) -> int:
+    async def get_quality_profile_id(self, profile_name: str) -> int:
         """Return a fixed quality profile ID for tests."""
+        del profile_name
         return 99
 
     async def get_all_media(self) -> list[dict[str, Any]]:
@@ -57,8 +58,9 @@ class FakeStarrClient:
         """Capture search payload for assertions."""
         self.search_called_with = media_items
 
-    async def add_tags_to_media(self, media_ids: list[int], _tag_id: int) -> None:
+    async def add_tags_to_media(self, media_ids: list[int], tag_id: int) -> None:
         """Capture tagged IDs for assertions."""
+        del tag_id
         self.tagged_ids = media_ids
 
 

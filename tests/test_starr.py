@@ -69,7 +69,7 @@ def test_filter_attended_applies_all_constraints() -> None:
         {
             "id": 1,
             "monitored": True,
-            "tags": [],
+            "tags": list[int](),
             "status": "released",
             "qualityProfileId": 10,
         },
@@ -108,7 +108,7 @@ def test_filter_attended_treats_zero_ids_as_valid_filters() -> None:
         {
             "id": 1,
             "monitored": True,
-            "tags": [],
+            "tags": list[int](),
             "status": "released",
             "qualityProfileId": 0,
         },
@@ -122,7 +122,7 @@ def test_filter_attended_treats_zero_ids_as_valid_filters() -> None:
         {
             "id": 3,
             "monitored": True,
-            "tags": [],
+            "tags": list[int](),
             "status": "released",
             "qualityProfileId": 10,
         },
