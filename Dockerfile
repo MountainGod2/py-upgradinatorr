@@ -9,6 +9,7 @@ WORKDIR /app
 
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
+ENV UV_PYTHON_DOWNLOADS=0
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
@@ -30,6 +31,7 @@ WORKDIR /app
 COPY --from=builder /app /app
 
 ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONUNBUFFERED=1
 
 VOLUME /config
 WORKDIR /config
@@ -39,7 +41,7 @@ COPY --chmod=0755 entrypoint.py /entrypoint.py
 ENTRYPOINT ["python", "/entrypoint.py"]
 CMD ["--help"]
 
-LABEL org.opencontainers.image.source="https://github.com/mountaingod2/py-upgradinatorr"
+LABEL org.opencontainers.image.source="https://github.com/MountainGod2/py-upgradinatorr"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.authors="MountainGod2"
 LABEL org.opencontainers.image.description="Upgradinatorr"
