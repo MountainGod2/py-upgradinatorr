@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.3.5 (2026-09-14)
+
+### Bug Fixes
+
+- **docs**: Update repository URLs in Dockerfile and README.md
+  ([`a4e3931`](https://github.com/MountainGod2/py-upgradinatorr/commit/a4e3931fedf417d2c6f6cfc97baeb0d788210923))
+
+
 ## v0.3.4 (2026-09-09)
 
 ### Bug Fixes
