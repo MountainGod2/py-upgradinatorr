@@ -39,7 +39,7 @@ COPY --chmod=0755 entrypoint.py /entrypoint.py
 ENTRYPOINT ["python", "/entrypoint.py"]
 CMD ["--help"]
 
-LABEL org.opencontainers.image.source="https://github.com/MountainGod2/upgradinatorr"
+LABEL org.opencontainers.image.source="https://github.com/mountaingod2/py-upgradinatorr"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.authors="MountainGod2"
 LABEL org.opencontainers.image.description="Upgradinatorr"

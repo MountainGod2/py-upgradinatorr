@@ -207,7 +207,7 @@ async def _handle_unattended_mode(
             "No media currently has the unattended tag "
             f"'{request.workflow.config.tag_name}' in {request.workflow.app_name.title()}. "
             "This is usually a configuration issue; if unexpected, open an issue at "
-            "https://github.com/mountaingod2/upgradinatorr/issues",
+            "https://github.com/mountaingod2/py-upgradinatorr/issues",
         )
         return [], False
 

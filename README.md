@@ -11,7 +11,7 @@ uv tool install upgradinatorr
 Or install from source:
 
 ```bash
-git clone https://github.com/MountainGod2/upgradinatorr
+git clone https://github.com/mountaingod2/py-upgradinatorr
 cd upgradinatorr
 uv sync
 source .venv/bin/activate  # or prefix the commands below with `uv run`
