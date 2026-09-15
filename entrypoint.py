@@ -12,7 +12,6 @@ import contextlib
 import os
 import pathlib
 import shutil
-import subprocess
 import sys
 
 
@@ -87,25 +86,28 @@ def _seed_config(
 
 
 def _drop_privileges(puid: int, pgid: int) -> None:
-    if hasattr(os, "setgid") and hasattr(os, "setuid"):
-        with contextlib.suppress(OSError):
-            os.setgroups([])
-        with contextlib.suppress(OSError):
-            os.setgid(pgid)
-        with contextlib.suppress(OSError):
-            os.setuid(puid)
+    """Drop from root to PUID/PGID, or refuse to continue running as root."""
+    if not (hasattr(os, "setgid") and hasattr(os, "setuid")):
+        return
+    if os.getuid() != 0:
+        return  # already unprivileged; nothing to do
+
+    try:
+        os.setgroups([])
+        os.setgid(pgid)
+        os.setuid(puid)
+    except OSError as e:
+        print(f"fatal: could not drop privileges to {puid}:{pgid}: {e}", file=sys.stderr)  # ruff: ignore[print]
+        sys.exit(1)
 
 
-def _exec_application(app_command: str) -> int:
+def _exec_application(app_command: str) -> None:
+    """Replace the current process with the target application."""
     sys.stdout.flush()
     sys.stderr.flush()
 
-    cmd_path = shutil.which(app_command)
-    if not cmd_path:
-        cmd_path = app_command
-
-    result = subprocess.run([cmd_path, *sys.argv[1:]], check=False)  # noqa: S603
-    return result.returncode
+    cmd_path = shutil.which(app_command) or app_command
+    os.execvp(cmd_path, [cmd_path, *sys.argv[1:]])  # ruff: ignore[start-process-with-no-shell]
 
 
 def main() -> None:
@@ -144,7 +146,7 @@ def main() -> None:
     _drop_privileges(puid, pgid)
 
     try:
-        sys.exit(_exec_application(app_command))
+        _exec_application(app_command)
     except OSError:
         sys.exit(1)
 

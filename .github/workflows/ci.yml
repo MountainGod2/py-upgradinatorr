@@ -76,7 +76,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Test | Run pytest
-        run: uv run pytest --cov=upgradinatorr --cov-report=xml --cov-report=term --cov-fail-under=30
+        run: uv run pytest --cov=upgradinatorr --cov-report=xml --cov-report=term --cov-fail-under=55
 
       - name: Test | Upload coverage report
         if: ${{ matrix.python-version == '3.12' }}

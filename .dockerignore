@@ -6,3 +6,12 @@ __pycache__
 .cache
 .pytest_cache
 upgradinatorr.conf
+.github
+.pre-commit-config.yaml
+tests
+docker-compose.yml
+Dockerfile
+CHANGELOG.md
+.coverage
+coverage.xml
+dist
