@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.3.6 (2026-09-15)
+
+### Bug Fixes
+
+- **docker**: Specify version for ca-certificates in Dockerfile
+  ([#68](https://github.com/MountainGod2/py-upgradinatorr/pull/68),
+  [`d121df0`](https://github.com/MountainGod2/py-upgradinatorr/commit/d121df0c33b07e1c48efdf0c4d75dd08f88112f9))
+
+- **docker**: Update .dockerignore to include additional files and directories
+  ([#68](https://github.com/MountainGod2/py-upgradinatorr/pull/68),
+  [`d121df0`](https://github.com/MountainGod2/py-upgradinatorr/commit/d121df0c33b07e1c48efdf0c4d75dd08f88112f9))
+
+
 ## v0.3.5 (2026-09-14)
 
 ### Bug Fixes
