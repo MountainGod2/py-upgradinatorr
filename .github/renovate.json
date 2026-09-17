@@ -31,5 +31,19 @@
       "username": "{{ secrets.MEND_DHI_USERNAME }}",
       "password": "{{ secrets.MEND_DHI_PASSWORD }}"
     }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ca-certificates=(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "ca-certificates",
+      "datasourceTemplate": "deb",
+      "registryUrlTemplate": "https://deb.debian.org/debian?suite=bookworm&components=main,contrib,non-free&binaryArch=amd64"
+    }
   ]
 }
