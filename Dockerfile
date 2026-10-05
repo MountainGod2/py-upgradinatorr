@@ -1,5 +1,5 @@
 # Stage 1: Builder
-FROM dhi.io/python:3.14-debian12-dev@sha256:22509e5fe07b06fb10edf3ad1ac014fc75d7aac52ee8cb2436d013e533528dc2 AS builder
+FROM dhi.io/python:3.14-debian12-dev@sha256:4b3a77c1aa89e623fc9d19ff5f9a13ea5482346b64befeef2acd7e1f0206da5f AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates=20250419~deb12u1 \
