@@ -30,7 +30,7 @@ dev = [
     "ruff==0.17.0",
     "textual-dev==1.8.0",
 ]
-build = ["python-semantic-release==10.7.0", "uv==0.12.24"]
+build = ["python-semantic-release==10.7.0", "uv==0.13.0"]
 
 [project.scripts]
 upgradinatorr = "upgradinatorr.cli:main"
