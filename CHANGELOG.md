@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.3.9 (2026-10-11)
+
+### Bug Fixes
+
+- **deps**: Update dependency aiohttp to v3.14.5
+  ([#143](https://github.com/MountainGod2/py-upgradinatorr/pull/143),
+  [`78c9341`](https://github.com/MountainGod2/py-upgradinatorr/commit/78c9341b63bb58e8686c1feb34e065b3d1555f38))
+
+
 ## v0.3.8 (2026-10-08)
 
 ### Bug Fixes
