@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.3.11 (2026-10-15)
+
+### Bug Fixes
+
+- **deps**: Update dependency pydantic-settings to v2.16.0
+  ([#152](https://github.com/MountainGod2/py-upgradinatorr/pull/152),
+  [`e5da13a`](https://github.com/MountainGod2/py-upgradinatorr/commit/e5da13a5752de643a869c684cbf013b65f84592f))
+
+
 ## v0.3.10 (2026-10-12)
 
 ### Bug Fixes
