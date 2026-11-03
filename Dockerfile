@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
 # Stage 2: Runtime
-FROM dhi.io/python:3.14-debian12@sha256:10267e5076b1a3b285c761e5037e2ddc4dee29778a866b5b35208a017bf4caca
+FROM dhi.io/python:3.14-debian12@sha256:9ad85d073b7225142f78fca95c102fae9e2c9a538bab96fec4edcea851595d23
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
