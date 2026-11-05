@@ -22,7 +22,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "aioresponses-ng==0.8.2",
-    "pyrefly==1.4.0",
+    "pyrefly==1.4.1",
     "pre-commit==4.7.0",
     "pytest==9.2.0",
     "pytest-asyncio==1.4.1.post1",
