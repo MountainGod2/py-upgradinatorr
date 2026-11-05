@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.3.15 (2026-11-05)
+
+### Bug Fixes
+
+- **deps**: Update dependency pydantic to v2.14.3
+  ([#208](https://github.com/MountainGod2/py-upgradinatorr/pull/208),
+  [`f853428`](https://github.com/MountainGod2/py-upgradinatorr/commit/f8534289572c313f4cfa3ba2be61f828c8db557d))
+
+
 ## v0.3.14 (2026-10-30)
 
 ### Bug Fixes
