@@ -27,7 +27,7 @@ dev = [
     "pytest==9.2.0",
     "pytest-asyncio==1.4.1.post1",
     "pytest-cov==7.1.0",
-    "ruff==0.17.4",
+    "ruff==0.17.5",
     "textual-dev==1.8.0",
 ]
 build = ["python-semantic-release==10.7.0", "uv==0.13.7"]
