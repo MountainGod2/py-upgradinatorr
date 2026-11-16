@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.3.17 (2026-11-16)
+
+### Bug Fixes
+
+- **deps**: Update dependency stamina to v26.2.0
+  ([#223](https://github.com/MountainGod2/py-upgradinatorr/pull/223),
+  [`0a9b539`](https://github.com/MountainGod2/py-upgradinatorr/commit/0a9b53971a62518780fe00617874709f92fc6c41))
+
+
 ## v0.3.16 (2026-11-14)
 
 ### Bug Fixes
